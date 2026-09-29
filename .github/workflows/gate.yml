@@ -1,0 +1,31 @@
+name: gate
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+# Self-contained: Foundry's reusable .NET gate (_dotnet.yml) is not in a release tag
+# yet (it lives on the feat/dotnet-variant branch). Once it lands, swap this file for
+#   uses: CMaintz/foundry/.github/workflows/gate.yml@vX  with: { stack: dotnet }
+# Until then, mirror `mise run gate` for the dotnet template: lint -> typecheck -> test -> audit.
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet restore
+      # lint: format check (Roslyn analyzers run in the build below via -warnaserror)
+      - run: dotnet format --verify-no-changes
+      # typecheck: build IS C#'s compile + analyzer pass; -warnaserror fails on any warning
+      - run: dotnet build --no-restore -warnaserror
+      # test
+      - run: dotnet test --no-build
+      # audit: dotnet list exits 0 even with findings, so fail explicitly on a vulnerable package
+      - run: '! dotnet list package --vulnerable --include-transitive 2>&1 | grep -q "has the following vulnerable"'

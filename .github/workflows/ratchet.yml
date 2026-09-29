@@ -1,0 +1,9 @@
+name: ratchet
+on: { pull_request: {} }
+jobs:
+  ratchet:
+    uses: CMaintz/foundry/.github/workflows/ratchet-report.yml@v2
+    with:
+      baselines: |
+        .habit-hooks/snooze.json
+    permissions: { contents: read, pull-requests: write }

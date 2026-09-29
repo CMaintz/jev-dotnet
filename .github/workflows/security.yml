@@ -1,0 +1,17 @@
+name: security
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+# Grant what the reusable security facade requests (secret scan + ruleset-guard need
+# pull-requests: read). A read-only default token would make the callable escalate
+# beyond the caller and fail at startup.
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  security:
+    uses: CMaintz/foundry/.github/workflows/security.yml@v2

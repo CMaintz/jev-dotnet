@@ -1,0 +1,14 @@
+name: bootstrap
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 6 * * 1' # weekly auto-prune of the snooze baseline
+jobs:
+  bootstrap:
+    uses: CMaintz/foundry/.github/workflows/bootstrap.yml@v2
+    with:
+      working_directory: '.'
+      # No habit-hooks C# plugin ships; structural smells come from the language-
+      # independent generic sensor (file-length + jscpd). See .habit-hooks/config.toml.
+      habit_hooks_plugin: 'habit-hooks-generic'
+    permissions: { contents: write, pull-requests: write }

@@ -1,0 +1,26 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+
+# Test + coverage
+[Tt]est[Rr]esults/
+coverage/
+*.coverage
+*.cobertura.xml
+coverage.opencover.xml
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Local env
+.env
+.env.local
+
+# Foundry loop telemetry
+.foundry/

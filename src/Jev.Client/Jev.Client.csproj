@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Jev</RootNamespace>
+    <AssemblyName>Jev.Client</AssemblyName>
+
+    <!-- NuGet package metadata. Community SDK: not published by TypeSafe. -->
+    <PackageId>Jev.Client</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Christoffer Maintz</Authors>
+    <Description>Unofficial community .NET client for TypeSafe AI's Jev System One model. Typed Choice/Score/Noul judgments with calibrated confidence, over a zero-dependency HTTP client.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/CMaintz/jev-dotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CMaintz/jev-dotnet.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>jev;typesafe;system-one;ai;llm;classification;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

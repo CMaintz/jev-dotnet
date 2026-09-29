@@ -1,0 +1,11 @@
+# There's no habit-hooks C# sensor, so structural analysis comes mostly from Roslyn
+# analyzers in `mise run typecheck` (dotnet build -warnaserror). This preset runs the
+# language-independent `generic` plugin: file-length + jscpd duplication.
+plugins = ["generic"]
+
+# Tests are not smell-scanned (language-agnostic principle - see README).
+files = ["**/*.cs", "!**/tests/**", "!**/bin/**", "!**/obj/**"]
+
+# File-length: flag files over 300 lines (oversized-file).
+[sensors.line-count]
+args = ["--max", "300"]
