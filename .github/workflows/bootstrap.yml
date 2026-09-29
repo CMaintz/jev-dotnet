@@ -5,7 +5,7 @@ on:
     - cron: '0 6 * * 1' # weekly auto-prune of the snooze baseline
 jobs:
   bootstrap:
-    uses: CMaintz/foundry/.github/workflows/bootstrap.yml@v2
+    uses: CMaintz/foundry/.github/workflows/bootstrap.yml@v1.2.0
     with:
       working_directory: '.'
       # No habit-hooks C# plugin ships; structural smells come from the language-
