@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 
 namespace Jev.Client.Tests;
 
@@ -19,12 +20,15 @@ internal sealed class StubHandler : HttpMessageHandler
 
     public string? LastAuthorization { get; private set; }
 
-    public StubHandler Enqueue(HttpStatusCode status, string body)
+    public StubHandler Enqueue(HttpStatusCode status, string body, TimeSpan? retryAfter = null)
     {
-        _responses.Enqueue(new HttpResponseMessage(status)
+        var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
+        if (retryAfter is { } delay)
         {
-            Content = new StringContent(body),
-        });
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(delay);
+        }
+
+        _responses.Enqueue(response);
         return this;
     }
 

@@ -6,7 +6,7 @@ public sealed class JevClientOptions
     /// <summary>API key. If null, the <c>TYPESAFE_API_KEY</c> environment variable is used.</summary>
     public string? ApiKey { get; set; }
 
-    /// <summary>Service base address. Combined with <c>/v1/systemone</c>.</summary>
+    /// <summary>Service base address; <c>/v1/systemone</c> is appended to its path (so a proxy prefix is kept).</summary>
     public Uri BaseUrl { get; set; } = new("https://api.typesafe.ai");
 
     /// <summary>Model id. <c>jev-latest</c> tracks the current recommended model.</summary>

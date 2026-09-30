@@ -2,5 +2,5 @@ name: ratchet
 on: { pull_request: {} }
 jobs:
   ratchet:
-    uses: CMaintz/foundry/.github/workflows/ratchet-report.yml@v1.2.0
+    uses: CMaintz/foundry/.github/workflows/ratchet-report.yml@467d6f5feb6f2d7258d4478f98043570f4da2c6e # v2.3.0 (fixes the report on a new baseline)
     permissions: { contents: read, pull-requests: write }

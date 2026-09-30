@@ -17,9 +17,16 @@ escalate only the low-confidence cases to a person or a larger model.
 
 ## Install
 
+Not yet published to NuGet (planned), so `dotnet add package Jev.Client` will not find
+it. Reference the project from source instead:
+
+```bash
+git clone https://github.com/CMaintz/jev-dotnet.git
+dotnet add <YourProject>.csproj reference jev-dotnet/src/Jev.Client/Jev.Client.csproj
 ```
-dotnet add package Jev.Client
-```
+
+or build a local package with `dotnet pack src/Jev.Client -c Release -o ./nupkg` and add
+`./nupkg` as a package source.
 
 Targets `net8.0`. No runtime dependencies (built on `System.Net.Http` and
 `System.Text.Json`).
@@ -111,6 +118,7 @@ using var client = new JevClient(new JevClientOptions
     Model = "jev-latest",                         // tracks the recommended model
     Timeout = TimeSpan.FromSeconds(30),
     MaxRetries = 3,
+    BaseUrl = new Uri("https://api.typesafe.ai"),   // e.g. a proxy; its path prefix is kept
     Handler = customHandler,                      // inject an HttpMessageHandler to test offline
 });
 ```
@@ -119,6 +127,7 @@ Keep the API key server-side. `JevClient` is thread-safe: create one and reuse i
 
 ## Roadmap
 
+- Publish `Jev.Client` to NuGet.
 - Multi-target `net8.0` plus `netstandard2.0` for broader reach.
 - Optional streaming of large batches; response caching for repeated states.
 - A live end-to-end sample against a real key.

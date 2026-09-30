@@ -86,6 +86,48 @@ public sealed class ResponseTests
     }
 
     [Fact]
+    public async Task Retries_until_max_retries_then_surfaces_the_last_error()
+    {
+        var handler = new StubHandler()
+            .Enqueue(HttpStatusCode.TooManyRequests, "{}", retryAfter: TimeSpan.Zero)
+            .Enqueue((HttpStatusCode)529, "{}", retryAfter: TimeSpan.Zero)
+            .Enqueue(HttpStatusCode.TooManyRequests, "{\"error\":\"slow down\"}");
+        using var client = ClientWith(handler, maxRetries: 2);
+
+        var error = await Assert.ThrowsAsync<JevRateLimitException>(() => client.SystemOneAsync("s", OneNoul));
+
+        Assert.Equal(3, handler.Calls);
+        Assert.Equal("{\"error\":\"slow down\"}", error.ResponseBody);
+    }
+
+    [Fact]
+    public async Task Overloaded_529_is_retried_then_succeeds()
+    {
+        var handler = new StubHandler()
+            .Enqueue((HttpStatusCode)529, "{}", retryAfter: TimeSpan.Zero)
+            .Enqueue(HttpStatusCode.OK, "{\"answers\":{\"q\":{\"type\":\"noul\",\"noul\":0.9}}}");
+        using var client = ClientWith(handler);
+
+        var response = await client.SystemOneAsync("s", OneNoul);
+
+        Assert.Equal(0.9, response["q"].NoulValue);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Cancellation_during_backoff_stops_retrying()
+    {
+        var handler = new StubHandler()
+            .Enqueue(HttpStatusCode.TooManyRequests, "{}", retryAfter: TimeSpan.FromMinutes(1))
+            .Enqueue(HttpStatusCode.OK, "{\"answers\":{}}");
+        using var client = ClientWith(handler);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SystemOneAsync("s", OneNoul, cts.Token));
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
     public async Task Unauthorized_and_validation_map_to_typed_errors()
     {
         var auth = new StubHandler().Enqueue(HttpStatusCode.Unauthorized, "{}");
