@@ -9,3 +9,9 @@ files = ["**/*.cs", "!**/tests/**", "!**/bin/**", "!**/obj/**"]
 # File-length: flag files over 300 lines (oversized-file).
 [sensors.line-count]
 args = ["--max", "300"]
+
+# jscpd is a Node CLI the Foundry .NET smells job doesn't install, so enabling it made the
+# job fail as an "incomplete run" on every PR touching C#. Disabled, matching Foundry's
+# dotnet preset; to turn duplication detection on, install Node + jscpd in that job first.
+[sensors.jscpd]
+disabled = true
