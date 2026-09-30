@@ -23,7 +23,7 @@ description = "Build = C#'s compile + analyzer pass"
 run = "dotnet build -warnaserror"
 
 [tasks.test]
-description = "Tests (wire a coverage floor via coverlet + a threshold)"
+description = "Tests with a 90% line-coverage floor (coverlet.msbuild, configured in the test project)"
 run = "dotnet test --no-build"
 
 [tasks.audit]
