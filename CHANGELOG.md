@@ -13,6 +13,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Automatic retry with exponential backoff on `429` / `529`; typed exceptions for `401` / `422` / `429` / `529`.
 - Foundry .NET gate: `dotnet format`, `dotnet build -warnaserror` (Roslyn analyzers), `dotnet test`, vulnerable-package audit.
 
+### Fixed
+
+- A `BaseUrl` with a path (e.g. a proxy at `https://host/typesafe`) lost its path: `new Uri(base, "/v1/systemone")` resolves from the host root. The endpoint is now `BaseUrl` path + `/v1/systemone`.
+
 ### Roadmap
 
 - `netstandard2.0` multi-target; response caching; a live-key end-to-end sample.

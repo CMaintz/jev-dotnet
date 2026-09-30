@@ -31,6 +31,20 @@ public sealed class RequestTests
         Assert.EndsWith("/v1/systemone", handler.LastRequestUri!.AbsolutePath, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("https://api.typesafe.ai", "https://api.typesafe.ai/v1/systemone")]
+    [InlineData("https://gateway.example.com/typesafe", "https://gateway.example.com/typesafe/v1/systemone")]
+    [InlineData("https://gateway.example.com/typesafe/", "https://gateway.example.com/typesafe/v1/systemone")]
+    public async Task Endpoint_keeps_the_base_url_path(string baseUrl, string expected)
+    {
+        var handler = new StubHandler().Enqueue(HttpStatusCode.OK, "{\"answers\":{}}");
+        using var client = new JevClient(new JevClientOptions { ApiKey = "k", Handler = handler, BaseUrl = new Uri(baseUrl) });
+
+        await client.SystemOneAsync("s", new Dictionary<string, Question> { ["q"] = new Noul("Refund?") });
+
+        Assert.Equal(new Uri(expected), handler.LastRequestUri);
+    }
+
     [Fact]
     public async Task Choice_criteria_is_a_map_score_is_an_array()
     {

@@ -36,7 +36,14 @@ public sealed class JevClient : IDisposable
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         _model = options.Model;
         _maxRetries = Math.Max(0, options.MaxRetries);
-        _endpoint = new Uri(options.BaseUrl, "/v1/systemone");
+        _endpoint = EndpointFor(options.BaseUrl);
+    }
+
+    // A leading-slash relative Uri would replace BaseUrl's path, dropping e.g. a proxy prefix.
+    private static Uri EndpointFor(Uri baseUrl)
+    {
+        ArgumentNullException.ThrowIfNull(baseUrl);
+        return new Uri(baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/v1/systemone");
     }
 
     /// <summary>Create a client with an explicit API key and otherwise-default options.</summary>
