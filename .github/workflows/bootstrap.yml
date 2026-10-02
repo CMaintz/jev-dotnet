@@ -5,10 +5,13 @@ on:
     - cron: '0 6 * * 1' # weekly auto-prune of the snooze baseline
 jobs:
   bootstrap:
-    uses: CMaintz/foundry/.github/workflows/bootstrap.yml@v1.2.0
+    uses: CMaintz/foundry/.github/workflows/bootstrap.yml@323a0ebbb78012cf933a5a24717ca9630cfb445c # v2.5.0
+    secrets:
+      app_private_key: ${{ secrets.BOOTSTRAP_APP_PRIVATE_KEY }}
     with:
       working_directory: '.'
       # No habit-hooks C# plugin ships; structural smells come from the language-
       # independent generic sensor (file-length + jscpd). See .habit-hooks/config.toml.
       habit_hooks_plugin: 'habit-hooks-generic'
+      app_client_id: ${{ vars.BOOTSTRAP_APP_CLIENT_ID }}
     permissions: { contents: write, pull-requests: write }
