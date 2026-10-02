@@ -6,14 +6,17 @@ on:
 concurrency:
   group: security-${{ github.ref }}
   cancel-in-progress: true
-# Grant what the reusable workflows request at the job level (tier0 needs
-# pull-requests: read for gitleaks/ruleset-guard). Without this, a read-only
-# default token makes the callable escalate beyond the caller and fail at startup.
 permissions:
   contents: read
   pull-requests: read
 jobs:
-  tier0:
-    uses: CMaintz/foundry/.github/workflows/tier0.yml@v1.2.0
-  sast:
-    uses: CMaintz/foundry/.github/workflows/semgrep.yml@v1.2.0
+  security:
+    uses: CMaintz/foundry/.github/workflows/security.yml@2112a422a905c329602701d7a0a40fbdb5b91a19 # v2.5.1
+    permissions:
+      contents: read
+      pull-requests: read # gitleaks lists the PR's commits
+    with:
+      # Gate-defining files: changing these alongside source needs the ruleset-change label.
+      ruleset_paths: '^(mise\.toml|Directory\.Build\.props|Jev\.sln|\.habit-hooks/|\.jscpd\.json|\.gitleaks\.toml|\.github/workflows/|scripts/)'
+      source_paths: '^src/'
+      test_paths: '^tests/'

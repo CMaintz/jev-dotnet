@@ -2,5 +2,7 @@ name: ratchet
 on: { pull_request: {} }
 jobs:
   ratchet:
-    uses: CMaintz/foundry/.github/workflows/ratchet-report.yml@467d6f5feb6f2d7258d4478f98043570f4da2c6e # v2.3.0 (fixes the report on a new baseline)
+    uses: CMaintz/foundry/.github/workflows/ratchet-report.yml@2112a422a905c329602701d7a0a40fbdb5b91a19 # v2.5.1
     permissions: { contents: read, pull-requests: write }
+    with:
+      baselines: .habit-hooks/snooze.json
