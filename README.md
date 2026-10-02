@@ -1,19 +1,19 @@
 # Jev.Client (.NET)
 
-A small, dependency-free .NET client for [TypeSafe AI's](https://typesafe.ai) **Jev**,
+A small, dependency-free .NET client for [TypeSafe AI's](https://typesafe.ai) Jev,
 a "System One" model that returns typed judgments instead of free text. You send a
 piece of *state* and a set of typed questions; you get back typed answers with
 calibrated confidence, which your code can act on directly.
 
-> Unofficial community SDK. Not published or endorsed by TypeSafe. Built against the
-> public API at `https://api.typesafe.ai`.
+> This is my own unofficial SDK, not published or endorsed by TypeSafe. It's built
+> against the public API at `https://api.typesafe.ai`.
 
 ## Why
 
 A chat LLM hands you a paragraph you have to parse and second-guess. Jev hands you a
 value with a shape: an enum choice, a number on a scale, or a yes/no probability, each
-with a confidence you can threshold on. The idiom is to run Jev on everything and
-escalate only the low-confidence cases to a person or a larger model.
+with a confidence you can threshold on. The idea is to run Jev on everything and only
+escalate the low-confidence cases to a person or a bigger model.
 
 ## Install
 
