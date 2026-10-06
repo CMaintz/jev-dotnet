@@ -1,0 +1,30 @@
+# Structural-smell severities, ported from the foundry dotnet preset. Severities only:
+# `lint` runs `dotnet format --verify-no-changes`, which also reads this file, so any
+# formatting option here (indent_style, csharp_* style rules) would become an instant
+# lint failure. Keep formatting/style preferences out of this file.
+#
+# Shape: the bulk line dials SonarAnalyzer's broad default ruleset down to `suggestion`
+# so the gate stays focused, then the per-rule lines promote only the structural smells
+# back to `warning`. Per-rule severity wins over the bulk line regardless of order.
+#
+# The bulk line does NOT weaken the built-in CA gate: AnalysisLevel=latest-recommended
+# (Directory.Build.props) sets per-rule CA severities that outrank this bulk default, so
+# CA rules keep their teeth under -warnaserror.
+#
+# No ratchet: `typecheck` uses a blanket -warnaserror, so every `warning` rule here is a
+# hard gate failure with no snooze. Sonar's thresholds (S138 ~80 lines, S107 7 params,
+# S3776 cognitive 15, S1541 cyclomatic 10, S104 1000 lines/file) use Sonar defaults and
+# are not tunable from .editorconfig.
+
+root = true
+
+[*.cs]
+# Everything in SonarAnalyzer's default set is a non-blocking suggestion ...
+dotnet_analyzer_diagnostic.severity = suggestion
+
+# ... except the structural smells, which are the focused gate:
+dotnet_diagnostic.S138.severity = warning   # method/function too long
+dotnet_diagnostic.S1541.severity = warning  # cyclomatic complexity too high
+dotnet_diagnostic.S3776.severity = warning  # cognitive complexity too high
+dotnet_diagnostic.S107.severity = warning   # too many parameters
+dotnet_diagnostic.S104.severity = warning   # too many lines in a file (class-size proxy)
