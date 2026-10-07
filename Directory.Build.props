@@ -11,4 +11,12 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- SonarAnalyzer.CSharp adds the structural-smell rules (method length, cyclomatic
+         and cognitive complexity, too many parameters, file size) the built-in CA rules
+         lack. Which Sonar rules gate is tuned in .editorconfig. Pinned; Renovate's nuget
+         manager tracks this. PrivateAssets=all keeps it a build-time dev dependency so it
+         never flows to consumers of the package. -->
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" PrivateAssets="all" />
+  </ItemGroup>
 </Project>
