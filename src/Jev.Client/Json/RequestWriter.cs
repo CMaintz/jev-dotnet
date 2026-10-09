@@ -16,13 +16,25 @@ internal static class RequestWriter
             w.WriteStartObject();
             w.WriteString("model", model);
             w.WritePropertyName("state");
-            JsonSerializer.Serialize(w, state, JevJson.Options);
+            WriteState(w, state);
             w.WritePropertyName("questions");
             WriteQuestions(w, questions);
             w.WriteEndObject();
         }
 
         return buffer.ToArray();
+    }
+
+    private static void WriteState(Utf8JsonWriter w, object state)
+    {
+        try
+        {
+            JsonSerializer.Serialize(w, state, JevJson.Options);
+        }
+        catch (Exception e) when (e is NotSupportedException or JsonException or ArgumentException or InvalidOperationException)
+        {
+            throw new ArgumentException($"The state could not be written as JSON: {e.Message}", nameof(state), e);
+        }
     }
 
     private static void WriteQuestions(Utf8JsonWriter w, IReadOnlyDictionary<string, Question> questions)
@@ -40,11 +52,19 @@ internal static class RequestWriter
     private static void WriteQuestion(Utf8JsonWriter w, Question question)
     {
         w.WriteStartObject();
-        w.WriteString("type", question.Type);
+        w.WriteString("type", WireType(question));
         w.WriteString("instructions", question.Instructions);
         WriteCriteria(w, question);
         w.WriteEndObject();
     }
+
+    private static string WireType(Question question) => question switch
+    {
+        Choice => "choice",
+        Score => "score",
+        Noul => "noul",
+        _ => throw new ArgumentException($"Unknown question type {question.GetType().Name}.", nameof(question)),
+    };
 
     private static void WriteCriteria(Utf8JsonWriter w, Question question)
     {

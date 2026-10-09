@@ -16,6 +16,16 @@ public class JevException : Exception
         StatusCode = statusCode;
         ResponseBody = responseBody;
     }
+
+    /// <summary>The typed exception for a non-2xx <paramref name="status"/>.</summary>
+    internal static JevException ForStatus(int status, string body) => status switch
+    {
+        401 => new JevAuthException("Unauthorized: invalid or missing API key.", body),
+        422 => new JevValidationException("Unprocessable entity: the request was rejected as malformed.", body),
+        429 => new JevRateLimitException("Rate limit exceeded; retries exhausted.", body),
+        529 => new JevOverloadedException("Service overloaded; retries exhausted.", body),
+        _ => new JevException($"Unexpected HTTP {status} from Jev.", status, body),
+    };
 }
 
 /// <summary>401: the API key is missing or invalid.</summary>

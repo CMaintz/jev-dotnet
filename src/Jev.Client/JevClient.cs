@@ -12,38 +12,29 @@ namespace Jev;
 public sealed class JevClient : IDisposable
 {
     private const string EnvKey = "TYPESAFE_API_KEY";
-    private static readonly HashSet<int> Retryable = [429, 529];
 
     private readonly HttpClient _http;
     private readonly string _model;
-    private readonly int _maxRetries;
-    private readonly Uri _endpoint;
+    private readonly RetryingSender _sender;
 
     /// <summary>Create a client from explicit options.</summary>
+    /// <exception cref="ArgumentException">An option is invalid, e.g. a blank model or a base URL with a query.</exception>
+    /// <exception cref="JevException">No usable API key is configured or found in <c>TYPESAFE_API_KEY</c>.</exception>
     public JevClient(JevClientOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable(EnvKey);
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            throw new JevException($"No API key. Set {EnvKey} or JevClientOptions.ApiKey.");
-        }
+        options.Validate();
+        var endpoint = Endpoint(options.BaseUrl);
+        var apiKey = ResolveApiKey(options.ApiKey);
 
-        _http = new HttpClient(options.Handler ?? new HttpClientHandler(), disposeHandler: true)
+        // A handler the caller passed in is theirs to dispose; ours is disposed with the client.
+        _http = new HttpClient(options.Handler ?? new HttpClientHandler(), disposeHandler: options.Handler is null)
         {
             Timeout = options.Timeout,
         };
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         _model = options.Model;
-        _maxRetries = Math.Max(0, options.MaxRetries);
-        _endpoint = EndpointFor(options.BaseUrl);
-    }
-
-    // A leading-slash relative Uri would replace BaseUrl's path, dropping e.g. a proxy prefix.
-    private static Uri EndpointFor(Uri baseUrl)
-    {
-        ArgumentNullException.ThrowIfNull(baseUrl);
-        return new Uri(baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/v1/systemone");
+        _sender = new RetryingSender(_http, endpoint, options.MaxRetries, options.TimeProvider);
     }
 
     /// <summary>Create a client with an explicit API key and otherwise-default options.</summary>
@@ -60,6 +51,9 @@ public sealed class JevClient : IDisposable
     /// be a string, or any object/collection serializable to JSON (dictionaries give
     /// exact control over field names). Answers come back keyed by the same ids.
     /// </summary>
+    /// <exception cref="ArgumentException">There are no questions, a question is null, or the state cannot be written as JSON.</exception>
+    /// <exception cref="JevException">Any network, timeout, HTTP, or response-format failure.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     public async Task<SystemOneResponse> SystemOneAsync(
         object state,
         IReadOnlyDictionary<string, Question> questions,
@@ -67,63 +61,35 @@ public sealed class JevClient : IDisposable
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(questions);
-        if (questions.Count == 0)
+        if (questions.Count == 0 || questions.Values.Any(q => q is null))
         {
-            throw new ArgumentException("At least one question is required.", nameof(questions));
+            throw new ArgumentException("At least one question is required, and none may be null.", nameof(questions));
         }
 
         var body = RequestWriter.Serialize(state, _model, questions);
-        var json = await SendWithRetriesAsync(body, cancellationToken).ConfigureAwait(false);
-        return ResponseReader.Parse(json);
+        var json = await _sender.SendAsync(body, cancellationToken).ConfigureAwait(false);
+        return ResponseReader.Parse(json, questions);
     }
-
-    private async Task<string> SendWithRetriesAsync(byte[] body, CancellationToken ct)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            using var response = await PostAsync(body, ct).ConfigureAwait(false);
-            var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            var status = (int)response.StatusCode;
-            if (response.IsSuccessStatusCode)
-            {
-                return payload;
-            }
-
-            if (Retryable.Contains(status) && attempt < _maxRetries)
-            {
-                await DelayBeforeRetryAsync(response, attempt, ct).ConfigureAwait(false);
-                continue;
-            }
-
-            throw ErrorFor(status, payload);
-        }
-    }
-
-    private async Task<HttpResponseMessage> PostAsync(byte[] body, CancellationToken ct)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
-        request.Content = new ByteArrayContent(body);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        return await _http.SendAsync(request, ct).ConfigureAwait(false);
-    }
-
-    private static async Task DelayBeforeRetryAsync(HttpResponseMessage response, int attempt, CancellationToken ct)
-    {
-        var retryAfter = response.Headers.RetryAfter?.Delta;
-        var backoff = retryAfter ?? TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt));
-        var jitter = TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
-        await Task.Delay(backoff + jitter, ct).ConfigureAwait(false);
-    }
-
-    private static JevException ErrorFor(int status, string body) => status switch
-    {
-        401 => new JevAuthException("Unauthorized: invalid or missing API key.", body),
-        422 => new JevValidationException("Unprocessable entity: the request was rejected as malformed.", body),
-        429 => new JevRateLimitException("Rate limit exceeded; retries exhausted.", body),
-        529 => new JevOverloadedException("Service overloaded; retries exhausted.", body),
-        _ => new JevException($"Unexpected HTTP {status} from Jev.", status, body),
-    };
 
     /// <inheritdoc />
     public void Dispose() => _http.Dispose();
+
+    // A leading-slash relative Uri would replace BaseUrl's path, dropping e.g. a proxy prefix.
+    private static Uri Endpoint(Uri baseUrl) => new(baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/v1/systemone");
+
+    private static string ResolveApiKey(string? configured)
+    {
+        var key = (configured ?? Environment.GetEnvironmentVariable(EnvKey))?.Trim();
+        if (string.IsNullOrEmpty(key))
+        {
+            throw new JevException($"No API key. Set {EnvKey} or JevClientOptions.ApiKey.");
+        }
+
+        if (key.Any(c => c is < '!' or > '~'))
+        {
+            throw new JevException("The API key may only contain printable ASCII characters.");
+        }
+
+        return key;
+    }
 }

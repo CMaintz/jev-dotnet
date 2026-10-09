@@ -5,16 +5,18 @@ namespace Jev.Client.Tests;
 
 public sealed class ResponseTests
 {
-    private static readonly Dictionary<string, Question> OneNoul = new() { ["q"] = new Noul("Refund?") };
-
-    private static JevClient ClientWith(StubHandler handler, int maxRetries = 3) =>
-        new(new JevClientOptions { ApiKey = "test-key", Handler = handler, MaxRetries = maxRetries });
+    private static readonly Dictionary<string, Question> Questions = new()
+    {
+        ["team"] = new Choice("Which team", new Dictionary<string, string> { ["billing"] = "pay", ["tech"] = "bugs" }),
+        ["anger"] = new Score("How angry", ["calm", "cross", "furious"]),
+        ["refund"] = new Noul("Refund?"),
+    };
 
     private static async Task<SystemOneResponse> Parse(string body)
     {
         var handler = new StubHandler().Enqueue(HttpStatusCode.OK, body);
-        using var client = ClientWith(handler);
-        return await client.SystemOneAsync("s", OneNoul);
+        using var client = handler.Client();
+        return await client.SystemOneAsync("s", Questions);
     }
 
     [Fact]
@@ -26,137 +28,122 @@ public sealed class ResponseTests
         "usage":{"input_tokens":10,"output_tokens":2}}
         """;
         var resp = await Parse(body);
-        var a = resp["team"];
+        var a = resp.GetChoice("team");
 
-        Assert.Equal("choice", a.Type);
-        Assert.Equal("tech", a.ChoiceValue);
-        Assert.Equal(0.9, a.Probabilities!["tech"]);
-        Assert.Null(a.ScoreProbabilities);
+        Assert.Equal("jev-1", resp.Model);
+        Assert.Equal("tech", a.Choice);
+        Assert.Equal(0.9, a.Probabilities["tech"]);
         Assert.True(a.IsConfident(0.7));
         Assert.Equal(10, resp.Usage!.InputTokens);
-        Assert.Single(resp.Choices);
+        Assert.Single(resp.Choices());
     }
 
     [Fact]
     public async Task Reads_a_score_answer_with_probability_array_and_legend()
     {
         const string body = """
-        {"answers":{"anger":{"type":"score","score":1.5,
+        {"answers":{"anger":{"score":1.5,
         "legend":{"0":"calm","1":"cross","2":"furious"},
         "probabilities":[0.2,0.3,0.5],"confidence":0.6}}}
         """;
-        var a = (await Parse(body))["anger"];
+        var a = (await Parse(body)).GetScore("anger");
 
-        Assert.Equal(1.5, a.ScoreValue);
-        Assert.Equal(3, a.ScoreProbabilities!.Count);
-        Assert.Null(a.Probabilities);
-        Assert.Equal("furious", a.Legend!["2"]);
-        Assert.Equal(0.5, a.ScoreProbabilities[2]);
+        Assert.Equal(1.5, a.Score);
+        Assert.Equal([0.2, 0.3, 0.5], a.Probabilities);
+        Assert.Equal("furious", a.Legend["2"]);
+        Assert.False(a.IsConfident(0.7));
     }
 
     [Fact]
-    public async Task Reads_a_noul_answer_which_has_no_confidence()
+    public async Task Reads_a_noul_answer_and_treats_missing_metadata_as_null()
     {
-        var resp = await Parse("{\"answers\":{\"refund\":{\"type\":\"noul\",\"noul\":0.85}}}");
-        var a = resp["refund"];
+        var resp = await Parse("{\"answers\":{\"refund\":{\"noul\":0.85}}}");
 
-        Assert.Equal(0.85, a.NoulValue);
+        Assert.Equal(0.85, resp.GetNoul("refund").Probability);
+        Assert.True(resp.GetNoul("refund").IsTrue(0.85));
+        Assert.Single(resp.Nouls());
+        Assert.Empty(resp.Scores());
+        Assert.Null(resp.Usage);
+        Assert.Null(resp.Model);
+    }
+
+    [Fact]
+    public async Task Answer_shape_comes_from_the_question_and_unknown_ids_are_ignored()
+    {
+        var resp = await Parse("{\"answers\":{\"refund\":{\"type\":\"bogus\",\"noul\":0.1},\"extra\":{\"noul\":1}}}");
+
+        Assert.IsType<NoulAnswer>(resp["refund"]);
+        Assert.Single(resp.Answers);
+    }
+
+    [Fact]
+    public async Task Choice_and_score_gate_uniformly_as_calibrated_answers()
+    {
+        var resp = await Parse(
+            "{\"answers\":{\"team\":{\"choice\":\"tech\",\"confidence\":0.9},\"anger\":{\"score\":0.4,\"confidence\":0.3}}}");
+
+        var confident = resp.Answers
+            .Where(kv => kv.Value is CalibratedAnswer c && c.IsConfident(0.7))
+            .Select(kv => kv.Key);
+        Assert.Equal(["team"], confident);
+    }
+
+    [Fact]
+    public async Task Missing_confidence_is_never_confident()
+    {
+        var a = (await Parse("{\"answers\":{\"team\":{\"choice\":\"tech\"}}}")).GetChoice("team");
+
         Assert.Null(a.Confidence);
-        Assert.False(a.IsConfident(0.5));
-        Assert.Single(resp.Nouls);
+        Assert.False(a.IsConfident(0));
     }
 
     [Fact]
-    public async Task Infers_type_when_the_field_is_absent()
+    public async Task Answers_and_questions_compare_by_content()
     {
-        var resp = await Parse("{\"answers\":{\"x\":{\"choice\":\"a\",\"probabilities\":{\"a\":1.0},\"confidence\":1.0}}}");
-        Assert.Equal("choice", resp["x"].Type);
+        const string body = "{\"answers\":{\"team\":{\"choice\":\"tech\",\"probabilities\":{\"tech\":0.9},\"confidence\":0.8},"
+            + "\"anger\":{\"score\":1,\"probabilities\":[0.5,0.5],\"legend\":{\"0\":\"calm\"}}}}";
+        var first = await Parse(body);
+        var second = await Parse(body);
+
+        Assert.Equal(first.GetChoice("team"), second.GetChoice("team"));
+        Assert.Equal(first, second);
+        Assert.Equal(first.GetScore("anger"), second.GetScore("anger"));
+        Assert.Equal(Questions["team"], new Choice("Which team", new Dictionary<string, string> { ["tech"] = "bugs", ["billing"] = "pay" }));
+        Assert.Equal(Questions["anger"], new Score("How angry", ["calm", "cross", "furious"]));
+        Assert.NotEqual(Questions["anger"], new Score("How angry", ["calm", "furious"]));
     }
 
     [Fact]
-    public async Task Retries_a_429_then_succeeds()
+    public async Task Huge_token_counts_do_not_overflow()
     {
-        var handler = new StubHandler()
-            .Enqueue(HttpStatusCode.TooManyRequests, "{}")
-            .Enqueue(HttpStatusCode.OK, "{\"answers\":{}}");
-        using var client = ClientWith(handler);
+        var resp = await Parse("{\"answers\":{},\"usage\":{\"input_tokens\":3000000000,\"output_tokens\":7}}");
 
-        await client.SystemOneAsync("s", OneNoul);
-        Assert.Equal(2, handler.Calls);
+        Assert.Equal(0, resp.Usage!.InputTokens);
+        Assert.Equal(7, resp.Usage.OutputTokens);
     }
 
     [Fact]
-    public async Task Retries_until_max_retries_then_surfaces_the_last_error()
+    public async Task Accessors_reject_missing_ids_and_wrong_types()
     {
-        var handler = new StubHandler()
-            .Enqueue(HttpStatusCode.TooManyRequests, "{}", retryAfter: TimeSpan.Zero)
-            .Enqueue((HttpStatusCode)529, "{}", retryAfter: TimeSpan.Zero)
-            .Enqueue(HttpStatusCode.TooManyRequests, "{\"error\":\"slow down\"}");
-        using var client = ClientWith(handler, maxRetries: 2);
+        var resp = await Parse("{\"answers\":{\"refund\":{\"noul\":0.5}}}");
 
-        var error = await Assert.ThrowsAsync<JevRateLimitException>(() => client.SystemOneAsync("s", OneNoul));
-
-        Assert.Equal(3, handler.Calls);
-        Assert.Equal("{\"error\":\"slow down\"}", error.ResponseBody);
+        Assert.Throws<KeyNotFoundException>(() => resp["team"]);
+        Assert.Throws<InvalidOperationException>(() => resp.GetChoice("refund"));
     }
 
-    [Fact]
-    public async Task Overloaded_529_is_retried_then_succeeds()
+    [Theory]
+    [InlineData("<html>oops</html>")]
+    [InlineData("[]")]
+    [InlineData("{}")]
+    [InlineData("{\"answers\":[]}")]
+    [InlineData("{\"answers\":{\"refund\":{\"noul\":1e400}}}")]
+    [InlineData("{\"answers\":{\"refund\":{}}}")]
+    [InlineData("{\"answers\":{\"anger\":{\"score\":1,\"probabilities\":[\"x\"]}}}")]
+    public async Task Malformed_bodies_surface_as_JevException_with_the_body(string body)
     {
-        var handler = new StubHandler()
-            .Enqueue((HttpStatusCode)529, "{}", retryAfter: TimeSpan.Zero)
-            .Enqueue(HttpStatusCode.OK, "{\"answers\":{\"q\":{\"type\":\"noul\",\"noul\":0.9}}}");
-        using var client = ClientWith(handler);
+        var error = await Assert.ThrowsAsync<JevException>(() => Parse(body));
 
-        var response = await client.SystemOneAsync("s", OneNoul);
-
-        Assert.Equal(0.9, response["q"].NoulValue);
-        Assert.Equal(2, handler.Calls);
-    }
-
-    [Fact]
-    public async Task Cancellation_during_backoff_stops_retrying()
-    {
-        var handler = new StubHandler()
-            .Enqueue(HttpStatusCode.TooManyRequests, "{}", retryAfter: TimeSpan.FromMinutes(1))
-            .Enqueue(HttpStatusCode.OK, "{\"answers\":{}}");
-        using var client = ClientWith(handler);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SystemOneAsync("s", OneNoul, cts.Token));
-        Assert.Equal(1, handler.Calls);
-    }
-
-    [Fact]
-    public async Task Unauthorized_and_validation_map_to_typed_errors()
-    {
-        var auth = new StubHandler().Enqueue(HttpStatusCode.Unauthorized, "{}");
-        using (var client = ClientWith(auth))
-        {
-            await Assert.ThrowsAsync<JevAuthException>(() => client.SystemOneAsync("s", OneNoul));
-        }
-
-        var bad = new StubHandler().Enqueue(HttpStatusCode.UnprocessableEntity, "{}");
-        using var client2 = ClientWith(bad);
-        await Assert.ThrowsAsync<JevValidationException>(() => client2.SystemOneAsync("s", OneNoul));
-    }
-
-    [Fact]
-    public async Task Exhausted_retries_surface_as_rate_limit()
-    {
-        var handler = new StubHandler().Enqueue(HttpStatusCode.TooManyRequests, "{}");
-        using var client = ClientWith(handler, maxRetries: 0);
-
-        await Assert.ThrowsAsync<JevRateLimitException>(() => client.SystemOneAsync("s", OneNoul));
-        Assert.Equal(1, handler.Calls);
-    }
-
-    [Fact]
-    public async Task Overloaded_529_is_retryable_then_typed_when_exhausted()
-    {
-        var handler = new StubHandler().Enqueue((HttpStatusCode)529, "{}");
-        using var client = ClientWith(handler, maxRetries: 0);
-
-        await Assert.ThrowsAsync<JevOverloadedException>(() => client.SystemOneAsync("s", OneNoul));
+        Assert.Equal(body, error.ResponseBody);
+        Assert.Null(error.StatusCode);
     }
 }
