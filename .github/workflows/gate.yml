@@ -14,10 +14,7 @@ permissions:
 # run against the committed .habit-hooks baseline.
 jobs:
   gate:
-    uses: CMaintz/foundry/.github/workflows/gate.yml@bc980e81bda32af3ef04b8149badf9529c3e6e84 # v2.9.0
+    uses: CMaintz/foundry/.github/workflows/gate.yml@f77fc773b2efe2a1fd5c4a323752efd059d337c4 # v2.10.0
     with:
       stack: dotnet
       working_directory: '.'
-      # Set explicitly: the dotnet stack default in the pinned gate.yml is not yet the
-      # dotnet sensor, so name it here to install foundry-habit-hooks-dotnet.
-      habit_hooks_plugin: foundry-habit-hooks-dotnet
