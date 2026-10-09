@@ -1,10 +1,18 @@
-# There's no habit-hooks C# sensor, so structural analysis comes mostly from Roslyn
-# analyzers in `mise run typecheck` (dotnet build -warnaserror). This preset runs the
-# language-independent `generic` plugin: file-length + jscpd duplication.
-plugins = ["generic"]
+# The habit-hooks dotnet sensor owns the structural smells (oversized-function,
+# high-complexity, too-many-parameters, oversized-file): it builds Jev.sln with
+# SonarAnalyzer.CSharp active (referenced only for the sensor's build, see
+# ../Directory.Build.props) and ratchets the warnings via the snooze baseline. typecheck
+# (`dotnet build -warnaserror`) keeps compile errors, the built-in CA rules and NuGetAudit.
+# The generic plugin adds file-length (below) and, opt-in, jscpd.
+plugins = ["dotnet", "generic"]
 
 # Tests are not smell-scanned (language-agnostic principle - see README).
 files = ["**/*.cs", "!**/tests/**", "!**/bin/**", "!**/obj/**"]
+
+# One solution (Jev.sln); name it so the sensor's `dotnet build` does not rely on MSBuild's
+# single-file auto-detection.
+[sensors.dotnet-build]
+args = ["Jev.sln"]
 
 # File-length: flag files over 300 lines (oversized-file).
 [sensors.line-count]

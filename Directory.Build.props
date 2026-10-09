@@ -11,12 +11,15 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
-  <ItemGroup>
-    <!-- SonarAnalyzer.CSharp adds the structural-smell rules (method length, cyclomatic
-         and cognitive complexity, too many parameters, file size) the built-in CA rules
-         lack. Which Sonar rules gate is tuned in .editorconfig. Pinned; Renovate's nuget
-         manager tracks this. PrivateAssets=all keeps it a build-time dev dependency so it
-         never flows to consumers of the package. -->
+  <!-- SonarAnalyzer.CSharp adds the structural-smell rules (method length, cyclomatic and
+       cognitive complexity, too many parameters, file size). It is scoped to the sensor's
+       own build: the reference loads only when CodeAnalysisRuleSet is set, which the
+       habit-hooks dotnet sensor sets and typecheck does not. So typecheck never loads Sonar
+       and cannot be flooded by it; the sensor builds with its ruleset, reads the structural
+       warnings and ratchets them against the snooze baseline. Pinned; Renovate's nuget
+       manager tracks this. PrivateAssets=all keeps it a build-time dev dependency so it
+       never flows to consumers of the package. -->
+  <ItemGroup Condition="'$(CodeAnalysisRuleSet)' != ''">
     <PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" PrivateAssets="all" />
   </ItemGroup>
 </Project>
