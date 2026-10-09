@@ -17,6 +17,6 @@ jobs:
       pull-requests: read # gitleaks lists the PR's commits
     with:
       # Gate-defining files: changing these alongside source needs the ruleset-change label.
-      ruleset_paths: '^(mise\.toml|Directory\.Build\.props|Jev\.sln|\.habit-hooks/|\.jscpd\.json|\.gitleaks\.toml|\.github/workflows/|scripts/)'
+      ruleset_paths: '^(mise\.toml|Directory\.Build\.props|\.editorconfig|Jev\.sln|\.habit-hooks/|\.jscpd\.json|\.gitleaks\.toml|\.github/workflows/|scripts/)'
       source_paths: '^src/'
       test_paths: '^tests/'
