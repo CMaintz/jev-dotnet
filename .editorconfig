@@ -3,18 +3,22 @@
 # formatting option here (indent_style, csharp_* style rules) would become an instant
 # lint failure. Keep formatting/style preferences out of this file.
 #
-# Shape: the bulk line dials SonarAnalyzer's broad default ruleset down to `suggestion`
-# so the gate stays focused, then the per-rule lines promote only the structural smells
-# back to `warning`. Per-rule severity wins over the bulk line regardless of order.
+# Shape: SonarAnalyzer is referenced only in the sensor's own build (see Directory.Build.props
+# - the reference is scoped to CodeAnalysisRuleSet), so `typecheck` (dotnet build -warnaserror)
+# never loads it. The bulk line below dials the remaining analyzer set (the built-in CA/IDE
+# rules) down to `suggestion`.
 #
 # The bulk line does NOT weaken the built-in CA gate: AnalysisLevel=latest-recommended
 # (Directory.Build.props) sets per-rule CA severities that outrank this bulk default, so
 # CA rules keep their teeth under -warnaserror.
 #
-# No ratchet: `typecheck` uses a blanket -warnaserror, so every `warning` rule here is a
-# hard gate failure with no snooze. Sonar's thresholds (S138 ~80 lines, S107 7 params,
-# S3776 cognitive 15, S1541 cyclomatic 10, S104 1000 lines/file) use Sonar defaults and
-# are not tunable from .editorconfig.
+# The five structural smells are owned by the habit-hooks `dotnet` sensor: it builds with its
+# own ruleset enabling them as warnings and ratchets them against the snooze baseline, so an
+# existing backlog is grandfathered and only new structural debt gates - which the old blanket
+# -warnaserror promotion could not do. They are listed at `suggestion` here as documentation
+# and defense in depth (typecheck does not load Sonar, so it never sees them). Sonar's
+# thresholds (S138 ~80 lines, S107 7 params, S3776 cognitive 15, S1541 cyclomatic 10,
+# S104 1000 lines/file) use Sonar defaults and are not tunable from .editorconfig.
 
 root = true
 
@@ -22,9 +26,9 @@ root = true
 # Everything in SonarAnalyzer's default set is a non-blocking suggestion ...
 dotnet_analyzer_diagnostic.severity = suggestion
 
-# ... except the structural smells, which are the focused gate:
-dotnet_diagnostic.S138.severity = warning   # method/function too long
-dotnet_diagnostic.S1541.severity = warning  # cyclomatic complexity too high
-dotnet_diagnostic.S3776.severity = warning  # cognitive complexity too high
-dotnet_diagnostic.S107.severity = warning   # too many parameters
-dotnet_diagnostic.S104.severity = warning   # too many lines in a file (class-size proxy)
+# ... and the five structural smells stay at `suggestion`: the dotnet sensor owns them (ratcheted):
+dotnet_diagnostic.S138.severity = suggestion   # method/function too long
+dotnet_diagnostic.S1541.severity = suggestion  # cyclomatic complexity too high
+dotnet_diagnostic.S3776.severity = suggestion  # cognitive complexity too high
+dotnet_diagnostic.S107.severity = suggestion   # too many parameters
+dotnet_diagnostic.S104.severity = suggestion   # too many lines in a file (class-size proxy)

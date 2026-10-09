@@ -14,7 +14,7 @@ permissions:
 # run against the committed .habit-hooks baseline.
 jobs:
   gate:
-    uses: CMaintz/foundry/.github/workflows/gate.yml@2112a422a905c329602701d7a0a40fbdb5b91a19 # v2.5.1
+    uses: CMaintz/foundry/.github/workflows/gate.yml@bc980e81bda32af3ef04b8149badf9529c3e6e84 # v2.9.0
     with:
       stack: dotnet
       working_directory: '.'
