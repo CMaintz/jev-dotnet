@@ -8,14 +8,11 @@ namespace Jev;
 /// </summary>
 public abstract record Question
 {
-    private protected Question(string type, string instructions)
+    private protected Question(string instructions)
     {
-        Type = type;
+        ArgumentException.ThrowIfNullOrWhiteSpace(instructions);
         Instructions = instructions;
     }
-
-    /// <summary>Wire discriminator: <c>noul</c>, <c>choice</c>, or <c>score</c>.</summary>
-    public string Type { get; }
 
     /// <summary>The judgment to make, in natural language. Reference nested state with backticked paths such as <c>ticket.messages[0].text</c>.</summary>
     public string Instructions { get; }

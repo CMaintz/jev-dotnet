@@ -11,7 +11,7 @@ public sealed record Noul : Question
     /// <param name="whenTrue">Optional description of what a "yes" means (wire <c>criteria.true</c>).</param>
     /// <param name="whenFalse">Optional description of what a "no" means (wire <c>criteria.false</c>).</param>
     public Noul(string instructions, string? whenTrue = null, string? whenFalse = null)
-        : base("noul", instructions)
+        : base(instructions)
     {
         WhenTrue = whenTrue;
         WhenFalse = whenFalse;

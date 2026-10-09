@@ -6,13 +6,10 @@ namespace Jev.Client.Tests;
 
 public sealed class RequestTests
 {
-    private static JevClient ClientWith(StubHandler handler) =>
-        new(new JevClientOptions { ApiKey = "test-key", Handler = handler });
-
     private static async Task<JsonElement> CapturedRequest(StubHandler handler, IReadOnlyDictionary<string, Question> questions, object state)
     {
         handler.Enqueue(HttpStatusCode.OK, "{\"answers\":{}}");
-        using var client = ClientWith(handler);
+        using var client = handler.Client();
         await client.SystemOneAsync(state, questions);
         return JsonDocument.Parse(handler.LastRequestBody!).RootElement.Clone();
     }
@@ -26,7 +23,7 @@ public sealed class RequestTests
 
         Assert.Equal("jev-latest", root.GetProperty("model").GetString());
         Assert.Equal("hello", root.GetProperty("state").GetProperty("text").GetString());
-        Assert.True(root.GetProperty("questions").TryGetProperty("q", out _));
+        Assert.Equal("noul", root.GetProperty("questions").GetProperty("q").GetProperty("type").GetString());
         Assert.Equal("Bearer test-key", handler.LastAuthorization);
         Assert.EndsWith("/v1/systemone", handler.LastRequestUri!.AbsolutePath, StringComparison.Ordinal);
     }
@@ -79,12 +76,86 @@ public sealed class RequestTests
     [Fact]
     public async Task Empty_questions_is_rejected()
     {
-        using var client = ClientWith(new StubHandler());
+        using var client = new StubHandler().Client();
         await Assert.ThrowsAsync<ArgumentException>(() => client.SystemOneAsync("s", new Dictionary<string, Question>()));
     }
 
     [Fact]
-    public void Score_requires_two_to_ten_levels()
+    public async Task Unwritable_state_is_rejected_before_sending()
+    {
+        var handler = new StubHandler();
+        using var client = handler.Client();
+        var questions = new Dictionary<string, Question> { ["q"] = new Noul("Refund?") };
+
+        await Assert.ThrowsAsync<ArgumentException>(() => client.SystemOneAsync(double.NaN, questions));
+        Assert.Equal(0, handler.Calls);
+        await Assert.ThrowsAsync<ArgumentException>(() => client.SystemOneAsync("s", new Dictionary<string, Question> { ["q"] = null! }));
+    }
+
+    [Fact]
+    public async Task Choice_options_keep_the_callers_order()
+    {
+        var options = new Dictionary<string, string>();
+        foreach (var option in new[] { "zeta", "alpha", "mid", "beta", "omega" })
+        {
+            options[option] = "about " + option;
+        }
+
+        var root = await CapturedRequest(
+            new StubHandler(), new Dictionary<string, Question> { ["q"] = new Choice("Pick", options) }, "s");
+        var sent = root.GetProperty("questions").GetProperty("q").GetProperty("criteria").EnumerateObject().Select(p => p.Name);
+
+        Assert.Equal(options.Keys, sent);
+    }
+
+    [Fact]
+    public void Questions_validate_their_arguments()
+    {
+        Assert.Throws<ArgumentException>(() => new Noul(" "));
+        Assert.Throws<ArgumentException>(() => new Choice("x", new Dictionary<string, string> { ["a"] = " " }));
+        Assert.Throws<ArgumentException>(() => new Score("x", ["low", ""]));
+        var tooMany = Enumerable.Range(0, Choice.MaxOptions + 1).ToDictionary(i => $"o{i}", i => $"option {i}");
+        Assert.Throws<ArgumentException>(() => new Choice("x", tooMany));
+    }
+
+    [Fact]
+    public void Options_are_validated_when_the_client_is_created()
+    {
+        Assert.Throws<ArgumentException>(() => new JevClient(new JevClientOptions { ApiKey = "k", Model = " " }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new JevClient(new JevClientOptions { ApiKey = "k", MaxRetries = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new JevClient(new JevClientOptions { ApiKey = "k", Timeout = TimeSpan.Zero }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new JevClient(new JevClientOptions { ApiKey = "k", Timeout = TimeSpan.FromDays(30) }));
+        Assert.Throws<ArgumentException>(() => new JevClient(
+            new JevClientOptions { ApiKey = "k", BaseUrl = new Uri("https://proxy.example.com?x=1") }));
+        Assert.Throws<ArgumentException>(() => new JevClient(
+            new JevClientOptions { ApiKey = "k", BaseUrl = new Uri("ftp://example.com") }));
+        Assert.Throws<JevException>(() => new JevClient(new JevClientOptions { ApiKey = "sk-abc€" }));
+    }
+
+    [Fact]
+    public async Task Api_key_whitespace_is_trimmed()
+    {
+        var handler = new StubHandler();
+        using var client = new JevClient(new JevClientOptions { ApiKey = " secret\n", Handler = handler });
+
+        await client.SystemOneAsync("s", new Dictionary<string, Question> { ["q"] = new Noul("Refund?") });
+
+        Assert.Equal("Bearer secret", handler.LastAuthorization);
+    }
+
+    [Fact]
+    public async Task A_handler_passed_in_is_not_disposed_with_the_client()
+    {
+        var handler = new StubHandler();
+        new JevClient(new JevClientOptions { ApiKey = "k", Handler = handler }).Dispose();
+
+        using var again = handler.Client();
+        await again.SystemOneAsync("s", new Dictionary<string, Question> { ["q"] = new Noul("Refund?") });
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public void Score_and_choice_require_a_valid_number_of_levels()
     {
         Assert.Throws<ArgumentException>(() => new Score("x", ["only one"]));
         Assert.Throws<ArgumentException>(() => new Choice("x", new Dictionary<string, string>()));

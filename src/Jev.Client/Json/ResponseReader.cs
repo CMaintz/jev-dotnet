@@ -3,108 +3,104 @@ using System.Text.Json;
 namespace Jev.Json;
 
 /// <summary>
-/// Parses a <c>system_one</c> response. Read by hand because <c>probabilities</c> is a
-/// map for a Choice but an array for a Score, and the per-answer <c>type</c> field may
-/// be absent (then it is inferred from which value fields are present).
+/// Decodes a <c>system_one</c> response into typed answers. Each answer's shape is
+/// taken from the question asked under its id, so the wire <c>type</c> field is never
+/// needed. Answers under ids that were not asked are ignored, and an asked id with no
+/// answer is simply absent. A body that is not JSON, has no <c>answers</c> object, or has
+/// an answer missing its value or carrying a non-finite number surfaces as a
+/// <see cref="JevException"/> carrying the raw body.
 /// </summary>
-internal static class ResponseReader
+internal sealed class ResponseReader
 {
-    public static SystemOneResponse Parse(string json)
+    private readonly string _body;
+
+    private ResponseReader(string body) => _body = body;
+
+    public static SystemOneResponse Parse(string body, IReadOnlyDictionary<string, Question> questions) =>
+        new ResponseReader(body).Parse(questions);
+
+    private SystemOneResponse Parse(IReadOnlyDictionary<string, Question> questions)
     {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        using var doc = ParseDocument();
+        var root = RequireObject(doc.RootElement, "response");
         return new SystemOneResponse
         {
-            Model = OptString(root, "model") ?? string.Empty,
-            Answers = ReadAnswers(root),
+            Model = OptString(root, "model"),
+            Answers = ReadAnswers(root, questions),
             Usage = ReadUsage(root),
         };
     }
 
-    private static Dictionary<string, Answer> ReadAnswers(JsonElement root)
+    private JsonDocument ParseDocument()
+    {
+        try
+        {
+            return JsonDocument.Parse(_body);
+        }
+        catch (JsonException e)
+        {
+            throw new JevException($"Malformed response: {e.Message}", responseBody: _body, inner: e);
+        }
+    }
+
+    private Dictionary<string, Answer> ReadAnswers(JsonElement root, IReadOnlyDictionary<string, Question> questions)
     {
         var answers = new Dictionary<string, Answer>();
-        if (root.TryGetProperty("answers", out var block) && block.ValueKind == JsonValueKind.Object)
+        var block = root.TryGetProperty("answers", out var found) ? found : default;
+        foreach (var entry in RequireObject(block, "answers").EnumerateObject())
         {
-            foreach (var entry in block.EnumerateObject())
+            if (questions.TryGetValue(entry.Name, out var question))
             {
-                answers[entry.Name] = ReadAnswer(entry.Value);
+                answers[entry.Name] = ReadAnswer(question, RequireObject(entry.Value, $"answer '{entry.Name}'"));
             }
         }
 
         return answers;
     }
 
-    private static Answer ReadAnswer(JsonElement e) => new()
+    private Answer ReadAnswer(Question question, JsonElement e) => question switch
     {
-        Type = OptString(e, "type") ?? Infer(e),
-        NoulValue = OptDouble(e, "noul"),
-        ChoiceValue = OptString(e, "choice"),
-        Probabilities = ReadProbabilityMap(e),
-        ScoreValue = OptDouble(e, "score"),
-        ScoreProbabilities = ReadProbabilityArray(e),
-        Legend = ReadStringMap(e, "legend"),
-        Confidence = OptDouble(e, "confidence"),
+        Choice => new ChoiceAnswer(RequireString(e, "choice"), ReadProbabilityMap(e), OptDouble(e, "confidence")),
+        Score => new ScoreAnswer(
+            RequireDouble(e, "score"), ReadProbabilityList(e), ReadLegend(e), OptDouble(e, "confidence")),
+        Noul => new NoulAnswer(RequireDouble(e, "noul")),
+        _ => throw new InvalidOperationException($"Unknown question type {question.GetType().Name}."),
     };
 
-    private static string Infer(JsonElement e)
+    private Dictionary<string, double> ReadProbabilityMap(JsonElement e)
     {
-        if (Has(e, "choice"))
-        {
-            return "choice";
-        }
-
-        if (Has(e, "score"))
-        {
-            return "score";
-        }
-
-        return Has(e, "noul") ? "noul" : string.Empty;
-    }
-
-    private static Dictionary<string, double>? ReadProbabilityMap(JsonElement e)
-    {
-        if (!e.TryGetProperty("probabilities", out var p) || p.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
         var map = new Dictionary<string, double>();
-        foreach (var entry in p.EnumerateObject())
+        if (e.TryGetProperty("probabilities", out var p) && p.ValueKind == JsonValueKind.Object)
         {
-            map[entry.Name] = entry.Value.GetDouble();
+            foreach (var entry in p.EnumerateObject())
+            {
+                map[entry.Name] = Number(entry.Value);
+            }
         }
 
         return map;
     }
 
-    private static List<double>? ReadProbabilityArray(JsonElement e)
+    private List<double> ReadProbabilityList(JsonElement e)
     {
-        if (!e.TryGetProperty("probabilities", out var p) || p.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
         var list = new List<double>();
-        foreach (var item in p.EnumerateArray())
+        if (e.TryGetProperty("probabilities", out var p) && p.ValueKind == JsonValueKind.Array)
         {
-            list.Add(item.GetDouble());
+            list.AddRange(p.EnumerateArray().Select(Number));
         }
 
         return list;
     }
 
-    private static Dictionary<string, string>? ReadStringMap(JsonElement e, string name)
+    private static Dictionary<string, string> ReadLegend(JsonElement e)
     {
-        if (!e.TryGetProperty(name, out var m) || m.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
         var map = new Dictionary<string, string>();
-        foreach (var entry in m.EnumerateObject())
+        if (e.TryGetProperty("legend", out var m) && m.ValueKind == JsonValueKind.Object)
         {
-            map[entry.Name] = entry.Value.GetString() ?? string.Empty;
+            foreach (var entry in m.EnumerateObject())
+            {
+                map[entry.Name] = entry.Value.ToString();
+            }
         }
 
         return map;
@@ -117,19 +113,35 @@ internal static class ResponseReader
             return null;
         }
 
-        return new Usage
-        {
-            InputTokens = (int)(OptDouble(u, "input_tokens") ?? 0),
-            OutputTokens = (int)(OptDouble(u, "output_tokens") ?? 0),
-        };
+        return new Usage { InputTokens = TokenCount(u, "input_tokens"), OutputTokens = TokenCount(u, "output_tokens") };
     }
 
-    private static bool Has(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind is not JsonValueKind.Null;
+    private JsonElement RequireObject(JsonElement e, string what) =>
+        e.ValueKind == JsonValueKind.Object ? e : throw Malformed($"{what} is not a JSON object");
+
+    private string RequireString(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString()!
+            : throw Malformed($"missing string field '{name}'");
+
+    private double RequireDouble(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number
+            ? Number(v)
+            : throw Malformed($"missing numeric field '{name}'");
+
+    private double? OptDouble(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? Number(v) : null;
+
+    private double Number(JsonElement v) =>
+        v.ValueKind == JsonValueKind.Number && double.IsFinite(v.GetDouble())
+            ? v.GetDouble()
+            : throw Malformed($"expected a finite number but got {v}");
+
+    private static int TokenCount(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var count) ? count : 0;
 
     private static string? OptString(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
-    private static double? OptDouble(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+    private JevException Malformed(string detail) => new($"Malformed response: {detail}.", responseBody: _body);
 }
