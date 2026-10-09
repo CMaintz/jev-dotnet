@@ -1,4 +1,4 @@
-# Jev.Client (.NET)
+# CMaintz.Jev.Client (.NET)
 
 A small, dependency-free .NET client for [TypeSafe AI's](https://typesafe.ai) Jev,
 a "System One" model that returns typed judgments instead of free text. You send a
@@ -17,8 +17,8 @@ escalate the low-confidence cases to a person or a bigger model.
 
 ## Install
 
-Not yet published to NuGet (planned), so `dotnet add package Jev.Client` will not find
-it. Reference the project from source instead:
+Not yet published to NuGet (planned), so `dotnet add package CMaintz.Jev.Client` will
+not find it. Reference the project from source instead:
 
 ```bash
 git clone https://github.com/CMaintz/jev-dotnet.git
@@ -127,7 +127,7 @@ Keep the API key server-side. `JevClient` is thread-safe: create one and reuse i
 
 ## Roadmap
 
-- Publish `Jev.Client` to NuGet.
+- Publish `CMaintz.Jev.Client` to NuGet.
 - Multi-target `net8.0` plus `netstandard2.0` for broader reach.
 - Optional streaming of large batches; response caching for repeated states.
 - A live end-to-end sample against a real key.
