@@ -12,6 +12,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Zero runtime dependencies (System.Net.Http + System.Text.Json). API key from `TYPESAFE_API_KEY` or `JevClientOptions`; injectable `HttpMessageHandler` transport seam for offline tests.
 - Automatic retry on `429` / `529` with exponential backoff, jitter, and `Retry-After` (seconds or a date), capped at 30 seconds per wait. Typed exceptions for `401` / `422` / `429` / `529`; network errors, timeouts, and malformed responses also surface as `JevException`.
 - `JevClientOptions` are validated when the client is created; a `Handler` passed in is not disposed by the client; `TimeProvider` drives retry waits. A `BaseUrl` path (e.g. a proxy prefix) is kept when building the endpoint.
+- `JevThresholds.Load(path)` / `Parse(json)` read a jev-eval `thresholds.json` (contract version 1). `Pick(questions, model)` returns the `PickedGate` for your questions (per-question or composite, matching jev-sort 1.2.0) with its measured accuracy, coverage and n, plus `Warnings` for a model mismatch or a reworded question. `ShouldEscalate(answers)` gates on the minimum choice/score confidence.
 - Foundry .NET gate: `dotnet format`, `dotnet build -warnaserror` (Roslyn analyzers), `dotnet test`, vulnerable-package audit.
 
 ### Roadmap

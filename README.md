@@ -118,6 +118,39 @@ near 0.5 means genuinely uncertain, not "medium yes". Both helpers pass at or ab
 threshold. A confidence threshold is not one number: use a
 stricter bar for consequential actions than for harmless ones, and tune it on your data.
 
+## Thresholds from jev-eval
+
+[jev-eval](https://github.com/CMaintz/jev-eval) measures Jev on your labeled data and
+writes a `thresholds.json` with the confidence gate for each question and a row-level
+gate for several together. Load it and pick the gate for the questions you send:
+
+```csharp
+var thresholds = JevThresholds.Load("thresholds.json");
+PickedGate gate = thresholds.Pick(questions, model: "jev-latest");
+
+logger.LogInformation("{Gate}", gate.Describe());
+// gate 0.82 from composite (jev-eval: 93.0% accuracy at 55.0% coverage, n=300, model jev-latest)
+foreach (var warning in gate.Warnings)
+{
+    logger.LogWarning("{Warning}", warning);
+}
+
+var response = await client.SystemOneAsync(state, questions);
+if (gate.ShouldEscalate(response))
+{
+    EscalateToHuman();
+}
+```
+
+`Pick` gates on the choice and score questions only (a noul has no confidence). With one
+of them it uses that question's gate; with several it uses the composite gate, which must
+have been measured on exactly those questions. When the file has no gate that fits, it
+throws a `JevThresholdsException` saying why. A different model, or a question reworded
+since jev-eval measured it, does not throw; it shows up in `Warnings`.
+
+`ShouldEscalate` compares the row confidence, the lowest confidence across the gated
+answers (`RowConfidence`), with the threshold. A missing answer or confidence escalates.
+
 ## Errors
 
 All service failures derive from `JevException`, which carries `StatusCode` and
