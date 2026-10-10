@@ -1,6 +1,6 @@
 namespace Jev;
 
-/// <summary>Base type for every error surfaced by <see cref="JevClient"/>.</summary>
+/// <summary>Base type for every error this SDK surfaces, from <see cref="JevClient"/> or <see cref="JevThresholds"/>.</summary>
 public class JevException : Exception
 {
     /// <summary>HTTP status code that triggered the error, when the failure was an HTTP response.</summary>
