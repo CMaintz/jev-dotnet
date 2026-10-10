@@ -15,8 +15,8 @@ internal static class GatePicker
         var (gate, source) = ids.Count switch
         {
             0 => throw new JevThresholdsException("Nothing to gate on (every question is a noul)."),
-            1 => (QuestionGate(file, ids[0]), ids[0]),
-            _ => (CompositeGate(file, ids), Composite),
+            1 => (OwnGate(file, ids[0]), ids[0]),
+            _ => (RowGate(file, ids), Composite),
         };
         return new PickedGate(gate, source, file.Model, ids, Warnings(file, questions, ids, model));
     }
@@ -25,13 +25,13 @@ internal static class GatePicker
     private static List<string> GatedIds(IReadOnlyDictionary<string, Question> questions) =>
         questions.Where(kv => kv.Value is not Noul).Select(kv => kv.Key).Order(StringComparer.Ordinal).ToList();
 
-    private static ThresholdGate QuestionGate(JevThresholds file, string id) =>
+    private static ThresholdGate OwnGate(JevThresholds file, string id) =>
         file.Questions.TryGetValue(id, out var entry)
             ? entry.Gate
             : throw new JevThresholdsException(
                 $"The thresholds file has no gate for \"{id}\" (jev-eval refused it or found no gate meeting the goal; see its report).");
 
-    private static ThresholdGate CompositeGate(JevThresholds file, List<string> ids)
+    private static ThresholdGate RowGate(JevThresholds file, List<string> ids)
     {
         var composite = file.Composite ?? throw new JevThresholdsException(
             $"The thresholds file has no composite gate for [{string.Join(", ", ids)}] "

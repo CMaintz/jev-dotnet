@@ -49,6 +49,7 @@ public sealed class JevThresholds
 
     /// <summary>Read and parse the thresholds file at <paramref name="path"/>.</summary>
     /// <exception cref="JevThresholdsException">The file is malformed or not contract version 1.</exception>
+    /// <exception cref="IOException">The file could not be read, e.g. it does not exist.</exception>
     public static JevThresholds Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
