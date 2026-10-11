@@ -19,13 +19,15 @@ internal sealed class RetryingSender
 
     private readonly HttpClient _http;
     private readonly Uri _endpoint;
+    private readonly AuthenticationHeaderValue _authorization;
     private readonly int _maxRetries;
     private readonly TimeProvider _time;
 
-    public RetryingSender(HttpClient http, Uri endpoint, int maxRetries, TimeProvider time)
+    public RetryingSender(HttpClient http, Uri endpoint, AuthenticationHeaderValue authorization, int maxRetries, TimeProvider time)
     {
         _http = http;
         _endpoint = endpoint;
+        _authorization = authorization;
         _maxRetries = maxRetries;
         _time = time;
     }
@@ -80,7 +82,9 @@ internal sealed class RetryingSender
 
     private async Task<HttpResponseMessage> PostAsync(byte[] body, CancellationToken ct)
     {
+        // Set per request, not on DefaultRequestHeaders, so a caller's shared HttpClient is never mutated.
         using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
+        request.Headers.Authorization = _authorization;
         request.Content = new ByteArrayContent(body);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         try
@@ -91,9 +95,14 @@ internal sealed class RetryingSender
         {
             throw new JevException($"Network error calling Jev: {e.Message}", inner: e);
         }
-        catch (TaskCanceledException e) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException e) when (!ct.IsCancellationRequested)
         {
             throw new JevException("Timed out calling Jev.", inner: e);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // A caller's pipeline (e.g. a Polly circuit breaker) may throw its own types.
+            throw new JevException($"Error calling Jev: {e.Message}", inner: e);
         }
     }
 }

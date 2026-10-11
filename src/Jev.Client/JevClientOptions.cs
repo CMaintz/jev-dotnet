@@ -15,16 +15,19 @@ public sealed class JevClientOptions
     /// <summary>Model id. <c>jev-latest</c> tracks the current recommended model.</summary>
     public string Model { get; set; } = "jev-latest";
 
-    /// <summary>Per-request timeout; positive and at most <see cref="int.MaxValue"/> milliseconds, or <see cref="Timeout.InfiniteTimeSpan"/>.</summary>
+    /// <summary>
+    /// Per-request timeout; positive and at most <see cref="int.MaxValue"/> milliseconds, or <see cref="Timeout.InfiniteTimeSpan"/>.
+    /// Ignored when you pass in your own <see cref="HttpClient"/>, whose timeout applies instead.
+    /// </summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>Maximum retries after a 429 or 529 before giving up; zero disables retrying.</summary>
     public int MaxRetries { get; set; } = 3;
 
     /// <summary>
-    /// Transport override. Inject a stub <see cref="HttpMessageHandler"/> to test
+    /// Handler override. Inject a stub <see cref="HttpMessageHandler"/> to test
     /// without a network; leave null for the default handler. A handler you pass in is
-    /// not disposed by the client.
+    /// not disposed by the client. Must be null when you pass in your own <see cref="HttpClient"/>.
     /// </summary>
     public HttpMessageHandler? Handler { get; set; }
 

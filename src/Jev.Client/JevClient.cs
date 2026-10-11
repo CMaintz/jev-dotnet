@@ -14,6 +14,7 @@ public sealed class JevClient : IDisposable
     private const string EnvKey = "TYPESAFE_API_KEY";
 
     private readonly HttpClient _http;
+    private readonly bool _ownsHttp;
     private readonly string _model;
     private readonly RetryingSender _sender;
 
@@ -21,20 +22,38 @@ public sealed class JevClient : IDisposable
     /// <exception cref="ArgumentException">An option is invalid, e.g. a blank model or a base URL with a query.</exception>
     /// <exception cref="JevException">No usable API key is configured or found in <c>TYPESAFE_API_KEY</c>.</exception>
     public JevClient(JevClientOptions options)
+        : this(options, http: null)
+    {
+    }
+
+    /// <summary>
+    /// Create a client on an <see cref="HttpClient"/> you own, such as a typed client from
+    /// <c>IHttpClientFactory</c> with your own resilience handlers. The client is never
+    /// disposed or reconfigured here: its own timeout applies, so <see cref="JevClientOptions.Timeout"/>
+    /// is ignored, and <see cref="JevClientOptions.Handler"/> must be left null. Requests go to
+    /// <see cref="JevClientOptions.BaseUrl"/>; the client's <see cref="HttpClient.BaseAddress"/> is not used.
+    /// </summary>
+    /// <exception cref="ArgumentException">An option is invalid, or a <see cref="JevClientOptions.Handler"/> is also set.</exception>
+    /// <exception cref="JevException">No usable API key is configured or found in <c>TYPESAFE_API_KEY</c>.</exception>
+    public JevClient(HttpClient httpClient, JevClientOptions? options = null)
+        : this(options ?? new JevClientOptions(), Required(httpClient))
+    {
+    }
+
+    private JevClient(JevClientOptions options, HttpClient? http)
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
-        var endpoint = Endpoint(options.BaseUrl);
-        var apiKey = ResolveApiKey(options.ApiKey);
-
-        // A handler the caller passed in is theirs to dispose; ours is disposed with the client.
-        _http = new HttpClient(options.Handler ?? new HttpClientHandler(), disposeHandler: options.Handler is null)
+        if (http is not null && options.Handler is not null)
         {
-            Timeout = options.Timeout,
-        };
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            throw new ArgumentException("Set either an HttpClient or JevClientOptions.Handler, not both.", nameof(options));
+        }
+
+        var authorization = new AuthenticationHeaderValue("Bearer", ResolveApiKey(options.ApiKey));
+        _ownsHttp = http is null;
+        _http = http ?? OwnedClient(options);
         _model = options.Model;
-        _sender = new RetryingSender(_http, endpoint, options.MaxRetries, options.TimeProvider);
+        _sender = new RetryingSender(_http, Endpoint(options.BaseUrl), authorization, options.MaxRetries, options.TimeProvider);
     }
 
     /// <summary>Create a client with an explicit API key and otherwise-default options.</summary>
@@ -71,8 +90,27 @@ public sealed class JevClient : IDisposable
         return ResponseReader.Parse(json, questions);
     }
 
-    /// <inheritdoc />
-    public void Dispose() => _http.Dispose();
+    /// <summary>Dispose the client's own <see cref="HttpClient"/>; one passed in is left open.</summary>
+    public void Dispose()
+    {
+        if (_ownsHttp)
+        {
+            _http.Dispose();
+        }
+    }
+
+    private static HttpClient Required(HttpClient httpClient)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        return httpClient;
+    }
+
+    // A handler the caller passed in is theirs to dispose; ours is disposed with the client.
+    private static HttpClient OwnedClient(JevClientOptions options) =>
+        new(options.Handler ?? new HttpClientHandler(), disposeHandler: options.Handler is null)
+        {
+            Timeout = options.Timeout,
+        };
 
     // A leading-slash relative Uri would replace BaseUrl's path, dropping e.g. a proxy prefix.
     private static Uri Endpoint(Uri baseUrl) => new(baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/v1/systemone");
