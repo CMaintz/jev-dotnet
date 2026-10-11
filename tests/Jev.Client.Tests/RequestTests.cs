@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Xunit;
 
@@ -152,6 +153,39 @@ public sealed class RequestTests
         using var again = handler.Client();
         await again.SystemOneAsync("s", new Dictionary<string, Question> { ["q"] = new Noul("Refund?") });
         Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task An_injected_HttpClient_carries_requests_and_is_left_open_and_unmodified()
+    {
+        var handler = new StubHandler();
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(7) };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "theirs");
+        var questions = new Dictionary<string, Question> { ["q"] = new Noul("Refund?") };
+
+        using (var client = new JevClient(http, new JevClientOptions { ApiKey = "first" }))
+        {
+            await client.SystemOneAsync("s", questions);
+        }
+
+        using var again = new JevClient(http, new JevClientOptions { ApiKey = "second" });
+        await again.SystemOneAsync("s", questions);
+        Assert.Equal(2, handler.Calls);
+        Assert.Equal("Bearer second", handler.LastAuthorization);
+        Assert.Equal("Bearer theirs", http.DefaultRequestHeaders.Authorization?.ToString());
+        Assert.Equal(TimeSpan.FromSeconds(7), http.Timeout);
+    }
+
+    [Fact]
+    public void A_null_HttpClient_is_rejected() =>
+        Assert.Throws<ArgumentNullException>(() => new JevClient((HttpClient)null!, new JevClientOptions { ApiKey = "k" }));
+
+    [Fact]
+    public void An_injected_HttpClient_rejects_a_handler_too()
+    {
+        using var http = new HttpClient(new StubHandler());
+
+        Assert.Throws<ArgumentException>(() => new JevClient(http, new JevClientOptions { ApiKey = "k", Handler = new StubHandler() }));
     }
 
     [Fact]

@@ -120,6 +120,15 @@ public sealed class RetryTests
     }
 
     [Fact]
+    public async Task A_pipeline_failure_of_any_type_becomes_JevException()
+    {
+        using var client = new StubHandler().FailWith(new InvalidOperationException("circuit open")).Client();
+
+        var error = await Assert.ThrowsAsync<JevException>(() => client.SystemOneAsync("s", OneNoul));
+        Assert.IsType<InvalidOperationException>(error.InnerException);
+    }
+
+    [Fact]
     public async Task Caller_cancellation_stays_an_OperationCanceledException()
     {
         var handler = new StubHandler()

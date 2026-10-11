@@ -189,7 +189,31 @@ using var client = new JevClient(new JevClientOptions
 Options are validated when the client is created. A `Handler` you pass in stays yours:
 the client does not dispose it.
 
-Keep the API key server-side. `JevClient` is thread-safe: create one and reuse it.
+To bring your own `HttpClient` (for example a typed client from `IHttpClientFactory` with
+Polly handlers), pass it in. It is never disposed or modified, its own timeout applies, and
+`Handler` must stay null. Requests go to `BaseUrl`, never the client's `BaseAddress`. Failures
+the pipeline throws (an open circuit breaker, say) still surface as `JevException`. With a resilience pipeline that already retries, set
+`MaxRetries = 0` so the two layers don't multiply, and give it timeouts long enough for a
+model call (the standard handler's defaults are 10 seconds per attempt, 30 in total):
+
+```csharp
+// AddStandardResilienceHandler comes from Microsoft.Extensions.Http.Resilience.
+services.AddSingleton(new JevClientOptions { ApiKey = "sk-...", MaxRetries = 0 }); // optional; else defaults + TYPESAFE_API_KEY
+services.AddHttpClient<JevClient>()
+    .AddStandardResilienceHandler(o =>
+    {
+        o.AttemptTimeout.Timeout = TimeSpan.FromSeconds(60);
+        o.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(3);
+        o.CircuitBreaker.SamplingDuration = TimeSpan.FromMinutes(2);
+    });
+
+// or by hand:
+using var client = new JevClient(httpClient, new JevClientOptions { ApiKey = "sk-..." });
+```
+
+Keep the API key server-side. `JevClient` is thread-safe: create one and reuse it. A typed
+client from `AddHttpClient<JevClient>()` is the exception: inject it where needed and don't
+hold it in a singleton.
 
 ## Roadmap
 
