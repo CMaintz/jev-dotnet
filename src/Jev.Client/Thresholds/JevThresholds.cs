@@ -33,16 +33,16 @@ public sealed class JevThresholds
     /// or no gate meeting the goal) are absent. A noul entry gates <c>|p - 0.5| * 2</c>, not
     /// a confidence, so <see cref="Pick"/> never uses it.
     /// </summary>
-    public IReadOnlyDictionary<string, QuestionGate> Questions { get; }
+    internal IReadOnlyDictionary<string, QuestionGate> Questions { get; }
 
     /// <summary>The row-level gate over several choice/score questions, or null when jev-eval did not produce one.</summary>
-    public CompositeGate? Composite { get; }
+    internal CompositeGate? Composite { get; }
 
     /// <summary>
     /// The exact question jev-eval sent for each id, or null for files written before
     /// jev-eval 1.2.0. Definitions that could not be read are left out.
     /// </summary>
-    public IReadOnlyDictionary<string, Question>? Definitions { get; }
+    internal IReadOnlyDictionary<string, Question>? Definitions { get; }
 
     /// <summary>Ids whose definition is present but not a valid question; treated as reworded.</summary>
     internal IReadOnlySet<string> UnreadableDefinitions { get; }
@@ -66,15 +66,15 @@ public sealed class JevThresholds
 
     /// <summary>
     /// The gate for <paramref name="questions"/>: with one choice/score question, that
-    /// question's own gate; with several, the <see cref="Composite"/> gate, which must have
+    /// question's own gate; with several, the composite gate, which must have
     /// been measured on exactly those questions. Nouls are ignored. A model mismatch or a
     /// question reworded since it was measured is reported in
-    /// <see cref="PickedGate.Warnings"/> rather than thrown.
+    /// <see cref="ThresholdGate.Warnings"/> rather than thrown.
     /// </summary>
     /// <param name="questions">The questions you send to Jev, keyed by id.</param>
     /// <param name="model">The model you call; null skips the model check.</param>
     /// <exception cref="JevThresholdsException">No gate in the file fits these questions.</exception>
-    public PickedGate Pick(IReadOnlyDictionary<string, Question> questions, string? model = null)
+    public ThresholdGate Pick(IReadOnlyDictionary<string, Question> questions, string? model = null)
     {
         ArgumentNullException.ThrowIfNull(questions);
         return GatePicker.Pick(this, questions, model);
