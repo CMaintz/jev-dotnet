@@ -65,7 +65,7 @@ internal sealed class ThresholdsReader
 
     private CompositeGate? ReadComposite(JsonElement root)
     {
-        if (!root.TryGetProperty("composite", out var c))
+        if (!root.TryGetProperty("composite", out var c) || c.ValueKind == JsonValueKind.Null)
         {
             return null;
         }
@@ -106,7 +106,7 @@ internal sealed class ThresholdsReader
         return definitions;
     }
 
-    private ThresholdGate ReadGate(JsonElement e) =>
+    private MeasuredGate ReadGate(JsonElement e) =>
         new(RequireDouble(e, "threshold"), RequireDouble(e, "accuracy"), RequireDouble(e, "coverage"), RequireCount(e, "n"));
 
     private JsonElement RequireObject(JsonElement e, string what) =>

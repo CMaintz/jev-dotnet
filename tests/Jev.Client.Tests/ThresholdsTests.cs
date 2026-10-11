@@ -33,20 +33,10 @@ public sealed class ThresholdsTests
     private static Dictionary<string, Question> Ask(params (string Id, Question Question)[] questions) =>
         questions.ToDictionary(q => q.Id, q => q.Question);
 
+    private static SystemOneResponse Respond(Dictionary<string, Answer> answers) => new() { Answers = answers };
+
     private static string Without(string key) =>
         Fixture.Replace($"\"{key}\":", $"\"ignored_{key}\":", StringComparison.Ordinal);
-
-    [Fact]
-    public void Parses_gates_composite_and_definitions()
-    {
-        var file = JevThresholds.Parse(Fixture);
-
-        Assert.Equal("jev-latest", file.Model);
-        Assert.Equal(new QuestionGate("choice", new ThresholdGate(0.8, 0.94, 0.61, 300)), file.Questions["team"]);
-        Assert.Equal(new CompositeGate(new ThresholdGate(0.82, 0.93, 0.55, 300), ["sentiment", "team"]), file.Composite);
-        Assert.Equal(Team, file.Definitions!["team"]);
-        Assert.Equal(Urgent, file.Definitions["urgent"]);
-    }
 
     [Fact]
     public void One_gated_question_uses_its_own_gate_and_ignores_nouls()
@@ -54,8 +44,9 @@ public sealed class ThresholdsTests
         var picked = JevThresholds.Parse(Fixture).Pick(Ask(("team", Team), ("urgent", Urgent)), "jev-latest");
 
         Assert.Equal("team", picked.Source);
-        Assert.Equal(0.8, picked.Threshold);
-        Assert.Equal(["team"], picked.Questions);
+        Assert.Equal((0.8, 0.94, 0.61, 300), (picked.Threshold, picked.Accuracy, picked.Coverage, picked.N));
+        Assert.Equal(["team"], picked.QuestionIds);
+        Assert.Equal("jev-latest", picked.Model);
         Assert.Empty(picked.Warnings);
     }
 
@@ -64,12 +55,26 @@ public sealed class ThresholdsTests
     {
         var picked = JevThresholds.Parse(Fixture).Pick(Ask(("team", Team), ("sentiment", Sentiment), ("urgent", Urgent)));
 
-        Assert.Equal("composite", picked.Source);
-        Assert.Equal(new ThresholdGate(0.82, 0.93, 0.55, 300), picked.Gate);
-        Assert.Equal("jev-latest", picked.Model);
+        Assert.Equal(ThresholdGate.Composite, picked.Source);
+        Assert.Equal(["sentiment", "team"], picked.QuestionIds);
+        Assert.Equal((0.82, 0.93, 0.55, 300), (picked.Threshold, picked.Accuracy, picked.Coverage, picked.N));
+        Assert.Empty(picked.Warnings);
         Assert.Equal(
             "gate 0.82 from composite (jev-eval: 93.0% accuracy at 55.0% coverage, n=300, model jev-latest)",
             picked.Describe());
+    }
+
+    [Fact]
+    public void Gates_compare_by_value()
+    {
+        var file = JevThresholds.Parse(Fixture);
+        var gate = file.Pick(Ask(("team", Team)));
+
+        Assert.Equal(gate, file.Pick(Ask(("team", Team))));
+        Assert.Equal(gate.GetHashCode(), file.Pick(Ask(("team", Team))).GetHashCode());
+        Assert.NotEqual(gate, file.Pick(Ask(("team", Team)), "jev-2"));
+        Assert.NotEqual(gate, file.Pick(Ask(("sentiment", Sentiment))));
+        Assert.False(gate.Equals(null));
     }
 
     [Fact]
@@ -78,6 +83,24 @@ public sealed class ThresholdsTests
         var picked = JevThresholds.Parse(Fixture).Pick(Ask(("sentiment", Sentiment)));
 
         Assert.StartsWith("gate 0.7 from \"sentiment\" (jev-eval: 91.0% accuracy", picked.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Describe_writes_whole_thresholds_without_a_trailing_zero()
+    {
+        var picked = JevThresholds.Parse(Fixture.Replace("\"threshold\": 0.8,", "\"threshold\": 1.0,", StringComparison.Ordinal))
+            .Pick(Ask(("team", Team)));
+
+        Assert.StartsWith("gate 1 from \"team\"", picked.Describe(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_null_composite_counts_as_absent()
+    {
+        var json = Fixture.Replace("\"composite\": {", "\"composite\": null, \"ignored\": {", StringComparison.Ordinal);
+
+        var e = Assert.Throws<JevThresholdsException>(() => JevThresholds.Parse(json).Pick(Ask(("team", Team), ("sentiment", Sentiment))));
+        Assert.Contains("no composite gate", e.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -145,10 +168,7 @@ public sealed class ThresholdsTests
     public void An_unreadable_definition_counts_as_reworded()
     {
         var json = Fixture.Replace("\"criteria\": [\"negative\", \"neutral\", \"positive\"]", "\"criteria\": [1, 2]", StringComparison.Ordinal);
-        var file = JevThresholds.Parse(json);
-
-        Assert.False(file.Definitions!.ContainsKey("sentiment"));
-        Assert.Single(file.Pick(Ask(("sentiment", Sentiment))).Warnings);
+        Assert.Single(JevThresholds.Parse(json).Pick(Ask(("sentiment", Sentiment))).Warnings);
     }
 
     [Theory]
@@ -169,22 +189,10 @@ public sealed class ThresholdsTests
     }
 
     [Fact]
-    public void A_noul_definition_keeps_its_criteria()
-    {
-        var json = Fixture.Replace(
-            "\"urgent\": {\"type\": \"noul\", \"instructions\": \"Is it urgent?\"}",
-            "\"urgent\": {\"type\": \"noul\", \"instructions\": \"Is it urgent?\", \"criteria\": {\"true\": \"yes\"}}",
-            StringComparison.Ordinal);
-
-        Assert.Equal(new Noul("Is it urgent?", whenTrue: "yes"), JevThresholds.Parse(json).Definitions!["urgent"]);
-    }
-
-    [Fact]
     public void Files_without_definitions_never_warn_about_rewording()
     {
         var file = JevThresholds.Parse(Without("definitions"));
 
-        Assert.Null(file.Definitions);
         Assert.Empty(file.Pick(Ask(("sentiment", new Score("other", ["a", "b"])))).Warnings);
     }
 
@@ -238,12 +246,11 @@ public sealed class ThresholdsTests
             ["urgent"] = new NoulAnswer(0.5),
         };
 
-        Assert.Equal(0.85, picked.RowConfidence(answers));
-        Assert.False(picked.ShouldEscalate(answers));
-        Assert.False(picked.ShouldEscalate(new SystemOneResponse { Answers = answers }));
+        Assert.Equal(0.85, picked.RowConfidence(Respond(answers)));
+        Assert.False(picked.ShouldEscalate(Respond(answers)));
 
         answers["sentiment"] = new ScoreAnswer(1.0, [0.3, 0.4, 0.3], new Dictionary<string, string>(), 0.4);
-        Assert.True(picked.ShouldEscalate(answers));
+        Assert.True(picked.ShouldEscalate(Respond(answers)));
     }
 
     [Fact]
@@ -255,8 +262,8 @@ public sealed class ThresholdsTests
             ["team"] = new ChoiceAnswer("tech", new Dictionary<string, double>(), null),
         };
 
-        Assert.Null(picked.RowConfidence(noConfidence));
-        Assert.True(picked.ShouldEscalate(noConfidence));
-        Assert.True(picked.ShouldEscalate(new Dictionary<string, Answer>()));
+        Assert.Null(picked.RowConfidence(Respond(noConfidence)));
+        Assert.True(picked.ShouldEscalate(Respond(noConfidence)));
+        Assert.True(picked.ShouldEscalate(Respond([])));
     }
 }

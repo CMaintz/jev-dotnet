@@ -126,7 +126,7 @@ gate for several together. Load it and pick the gate for the questions you send:
 
 ```csharp
 var thresholds = JevThresholds.Load("thresholds.json");
-PickedGate gate = thresholds.Pick(questions, model: "jev-latest");
+ThresholdGate gate = thresholds.Pick(questions, model: "jev-latest");
 
 logger.LogInformation("{Gate}", gate.Describe());
 // gate 0.82 from composite (jev-eval: 93.0% accuracy at 55.0% coverage, n=300, model jev-latest)
