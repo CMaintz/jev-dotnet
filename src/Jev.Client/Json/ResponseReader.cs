@@ -81,16 +81,43 @@ internal sealed class ResponseReader
         return map;
     }
 
+    // Score probabilities: an array, or (as the API sends them) an object keyed by level number.
     private List<double> ReadProbabilityList(JsonElement e)
     {
         var list = new List<double>();
-        if (e.TryGetProperty("probabilities", out var p) && p.ValueKind == JsonValueKind.Array)
+        if (!e.TryGetProperty("probabilities", out var p))
+        {
+            return list;
+        }
+
+        if (p.ValueKind == JsonValueKind.Array)
         {
             list.AddRange(p.EnumerateArray().Select(Number));
+        }
+        else if (p.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var entry in p.EnumerateObject())
+            {
+                Put(list, Level(entry.Name), Number(entry.Value));
+            }
         }
 
         return list;
     }
+
+    // A level the service omits reads as 0, so indexes always line up with levels.
+    private static void Put(List<double> levels, int level, double probability)
+    {
+        while (levels.Count <= level)
+        {
+            levels.Add(0);
+        }
+
+        levels[level] = probability;
+    }
+
+    private int Level(string key) =>
+        key is [>= '0' and <= '9'] ? key[0] - '0' : throw Malformed($"expected a score level number but got \"{key}\"");
 
     private static Dictionary<string, string> ReadLegend(JsonElement e)
     {
