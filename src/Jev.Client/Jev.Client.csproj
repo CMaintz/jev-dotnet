@@ -9,7 +9,7 @@
     <PackageId>CMaintz.Jev.Client</PackageId>
     <Version>0.1.0</Version>
     <Authors>Christoffer Maintz</Authors>
-    <Description>Unofficial community .NET client for TypeSafe AI's Jev System One model. Typed Choice/Score/Noul judgments with calibrated confidence, over a zero-dependency HTTP client.</Description>
+    <Description>Unofficial community .NET client for TypeSafe AI's Jev System One model. Typed Choice/Score/Noul/Box judgments with calibrated confidence, over a zero-dependency HTTP client.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/CMaintz/jev-dotnet</PackageProjectUrl>
     <RepositoryUrl>https://github.com/CMaintz/jev-dotnet.git</RepositoryUrl>

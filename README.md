@@ -75,16 +75,17 @@ bool wantsRefund = response.GetNoul("refund").IsTrue(0.5);
 The three questions above are answered in a single request. Independent questions are
 evaluated in parallel, so batching them is close to free.
 
-## The three primitives
+## The question types
 
 | Question | Ask when | Answer | Answer fields |
 | --- | --- | --- | --- |
 | `Choice` | one of a defined set | `ChoiceAnswer` | `Choice`, `Probabilities` (per option), `Confidence` |
 | `Score` | a position on an ordered scale | `ScoreAnswer` | `Score`, `Probabilities` (per level), `Legend`, `Confidence` |
 | `Noul` | a yes/no condition | `NoulAnswer` | `Probability` (0..1); no confidence |
+| `Box` | where something is in an image | `BoxAnswer` | `Top`, `Bottom`, `Left`, `Right` (0..1), `Confidence` |
 
 Each answer mirrors the question asked under its id. Fetch it with
-`response.GetChoice(id)` / `GetScore(id)` / `GetNoul(id)`, or pattern-match the
+`response.GetChoice(id)` / `GetScore(id)` / `GetNoul(id)` / `GetBox(id)`, or pattern-match the
 `Answer` returned by the indexer:
 
 ```csharp
@@ -94,6 +95,7 @@ var text = response[id] switch
     ChoiceAnswer c => c.Choice,
     ScoreAnswer s => $"{s.Score:0.0}",
     NoulAnswer n => n.IsTrue(0.5) ? "yes" : "no",
+    BoxAnswer b => $"{b.Left:0.00},{b.Top:0.00} to {b.Right:0.00},{b.Bottom:0.00}",
     _ => throw new UnreachableException(),
 };
 ```
@@ -118,6 +120,30 @@ new Choice(
 ```
 
 A structured Score level comes back in `Legend` as compact JSON text.
+
+### Box
+
+A `Box` finds one target in an image and answers with the four edges of the smallest box
+around it. Each edge is a fraction of the image's size from its top-left corner: `Top` and
+`Bottom` of the height, `Left` and `Right` of the width, so multiply by the image's pixel
+size to draw or crop. A Box takes only instructions, naming the target and the image:
+
+```csharp
+var questions = new Dictionary<string, Question>
+{
+    ["mug_visible"] = new Noul("Is there a coffee mug in `photo`?"),
+    ["mug"] = new Box("the coffee mug in `photo`"),
+};
+```
+
+A Box always returns a box, even when the target is absent, so ask a `Noul` alongside it
+and ignore the box when that answer is low. `BoxAnswer.IsConfident(threshold)` is false
+when the service gives no confidence. A request with a Box sends
+`TypeSafe-Danger-Zone-Images: true` for you. Box needs Jev 1.14 or later (`jev-latest` and
+`jev-preview` point there today) and an image in the request, which this SDK does not
+send yet. TypeSafe calls images and Box
+["dreamer-ready"](https://docs.typesafe.ai/primitives/box.md): experimental, with a
+request format and accuracy that may change between releases.
 
 ## Confidence
 
@@ -159,7 +185,8 @@ if (gate.ShouldEscalate(response))
 }
 ```
 
-`Pick` gates on the choice and score questions only (a noul has no confidence). With one
+`Pick` gates on the choice and score questions only (a noul has no confidence, and
+jev-eval does not measure a box). With one
 of them it uses that question's gate; with several it uses the composite gate, which must
 have been measured on exactly those questions. When the file has no gate that fits, it
 throws a `JevThresholdsException` saying why. A different model, or a question reworded

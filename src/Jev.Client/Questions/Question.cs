@@ -6,7 +6,7 @@ namespace Jev;
 /// A single judgment to ask Jev about the shared <c>state</c>. Pick the subtype by
 /// what the answer means: <see cref="Choice"/> for one of a defined set,
 /// <see cref="Score"/> for a position on an ordered scale, <see cref="Noul"/> for a
-/// yes/no probability. Independent questions sent together are evaluated in parallel.
+/// yes/no probability, <see cref="Box"/> for where something is in an image. Independent questions sent together are evaluated in parallel.
 /// </summary>
 /// <remarks>
 /// Instructions and criteria are text, or structured JSON when definitions, contrasts

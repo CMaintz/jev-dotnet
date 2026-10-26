@@ -104,10 +104,21 @@ public sealed class ThresholdsTests
     }
 
     [Fact]
-    public void Only_nouls_is_an_error()
+    public void A_box_is_never_gated()
     {
-        var e = Assert.Throws<JevThresholdsException>(() => JevThresholds.Parse(Fixture).Pick(Ask(("urgent", Urgent))));
-        Assert.Contains("nothing to gate on (every question is a noul)", e.Message, StringComparison.OrdinalIgnoreCase);
+        var picked = JevThresholds.Parse(Fixture).Pick(Ask(("team", Team), ("mug", new Box("the mug in `photo`"))));
+
+        Assert.Equal("team", picked.Source);
+        Assert.Equal(["team"], picked.QuestionIds);
+    }
+
+    [Fact]
+    public void Only_nouls_and_boxes_is_an_error()
+    {
+        var questions = Ask(("urgent", Urgent), ("mug", new Box("the mug in `photo`")));
+
+        var e = Assert.Throws<JevThresholdsException>(() => JevThresholds.Parse(Fixture).Pick(questions));
+        Assert.Contains("nothing to gate on (no choice or score question)", e.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

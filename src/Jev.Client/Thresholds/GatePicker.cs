@@ -3,7 +3,8 @@ namespace Jev;
 /// <summary>
 /// Picks the gate for a caller's questions, matching jev-sort 1.2.0: one choice/score
 /// question uses its own gate, several use the composite gate measured on exactly those
-/// questions. Nouls are never gated (their jev-eval threshold is not a confidence).
+/// questions. Nouls are never gated (their jev-eval threshold is not a confidence), and
+/// neither are Boxes, which jev-eval does not measure.
 /// </summary>
 internal static class GatePicker
 {
@@ -12,7 +13,7 @@ internal static class GatePicker
         var ids = GatedIds(questions);
         var (gate, source) = ids.Count switch
         {
-            0 => throw new JevThresholdsException("Nothing to gate on (every question is a noul)."),
+            0 => throw new JevThresholdsException("Nothing to gate on (no choice or score question)."),
             1 => (OwnGate(file, ids[0]), ids[0]),
             _ => (RowGate(file, ids), ThresholdGate.Composite),
         };
@@ -21,7 +22,7 @@ internal static class GatePicker
 
     /// <summary>The ids of the choice and score questions, in ordinal order.</summary>
     private static List<string> GatedIds(IReadOnlyDictionary<string, Question> questions) =>
-        questions.Where(kv => kv.Value is not Noul).Select(kv => kv.Key).Order(StringComparer.Ordinal).ToList();
+        questions.Where(kv => kv.Value is Choice or Score).Select(kv => kv.Key).Order(StringComparer.Ordinal).ToList();
 
     private static MeasuredGate OwnGate(JevThresholds file, string id) =>
         file.Questions.TryGetValue(id, out var entry)
