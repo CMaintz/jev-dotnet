@@ -8,7 +8,7 @@ public sealed class JevClientOptions
 
     /// <summary>
     /// Service base address: an absolute http(s) URL without a query or fragment.
-    /// <c>/v1/systemone</c> is appended to its path, so a proxy prefix is kept.
+    /// <c>/v1/systemone</c> and <c>/v1/models</c> are appended to its path, so a proxy prefix is kept.
     /// </summary>
     public Uri BaseUrl { get; set; } = new("https://api.typesafe.ai");
 

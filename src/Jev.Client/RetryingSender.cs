@@ -4,7 +4,7 @@ using System.Text;
 namespace Jev;
 
 /// <summary>
-/// Posts a request body, retrying <c>408</c>, <c>429</c> and every <c>5xx</c> (including
+/// Sends an <see cref="ApiRequest"/>, retrying <c>408</c>, <c>429</c> and every <c>5xx</c> (including
 /// <c>529</c>) with exponential backoff plus jitter, as TypeSafe's own SDKs do. A
 /// <c>retry-after-ms</c> header, else <c>Retry-After</c> (seconds or a date), takes
 /// precedence over the computed delay, and every delay is capped. Transport failures and timeouts become a
@@ -18,26 +18,24 @@ internal sealed class RetryingSender
     private const int MaxJitterMilliseconds = 250;
 
     private readonly HttpClient _http;
-    private readonly Uri _endpoint;
     private readonly AuthenticationHeaderValue _authorization;
     private readonly int _maxRetries;
     private readonly TimeProvider _time;
 
-    public RetryingSender(HttpClient http, Uri endpoint, AuthenticationHeaderValue authorization, int maxRetries, TimeProvider time)
+    public RetryingSender(HttpClient http, AuthenticationHeaderValue authorization, int maxRetries, TimeProvider time)
     {
         _http = http;
-        _endpoint = endpoint;
         _authorization = authorization;
         _maxRetries = maxRetries;
         _time = time;
     }
 
     /// <summary>The body of the first 2xx response; otherwise the typed <see cref="JevException"/>.</summary>
-    public async Task<string> SendAsync(byte[] body, CancellationToken ct)
+    public async Task<string> SendAsync(ApiRequest request, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
-            using var response = await PostAsync(body, ct).ConfigureAwait(false);
+            using var response = await TrySendAsync(request, ct).ConfigureAwait(false);
             var payload = await ReadBodyAsync(response, ct).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
@@ -88,16 +86,13 @@ internal sealed class RetryingSender
         _ => null,
     };
 
-    private async Task<HttpResponseMessage> PostAsync(byte[] body, CancellationToken ct)
+    private async Task<HttpResponseMessage> TrySendAsync(ApiRequest request, CancellationToken ct)
     {
         // Set per request, not on DefaultRequestHeaders, so a caller's shared HttpClient is never mutated.
-        using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint);
-        request.Headers.Authorization = _authorization;
-        request.Content = new ByteArrayContent(body);
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        using var message = request.ToMessage(_authorization);
         try
         {
-            return await _http.SendAsync(request, ct).ConfigureAwait(false);
+            return await _http.SendAsync(message, ct).ConfigureAwait(false);
         }
         catch (HttpRequestException e)
         {

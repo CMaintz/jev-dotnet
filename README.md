@@ -232,6 +232,15 @@ services.AddHttpClient<JevClient>()
 using var client = new JevClient(httpClient, new JevClientOptions { ApiKey = "sk-..." });
 ```
 
+To see which models and aliases your key can use, list them:
+
+```csharp
+foreach (var model in await client.ModelsAsync())
+{
+    Console.WriteLine($"{model.Name} ({model.ReleaseDate}): {model.Description}");
+}
+```
+
 Keep the API key server-side. `JevClient` is thread-safe: create one and reuse it. A typed
 client from `AddHttpClient<JevClient>()` is the exception: inject it where needed and don't
 hold it in a singleton.
