@@ -21,7 +21,7 @@ public sealed class JevClientOptions
     /// </summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(60);
 
-    /// <summary>Maximum retries after a 429 or 529 before giving up; zero disables retrying.</summary>
+    /// <summary>Maximum retries after a 408, 429 or 5xx before giving up; zero disables retrying.</summary>
     public int MaxRetries { get; set; } = 3;
 
     /// <summary>

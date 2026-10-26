@@ -4,15 +4,15 @@ using System.Text;
 namespace Jev;
 
 /// <summary>
-/// Posts a request body, retrying <c>429</c> and <c>529</c> with exponential backoff plus
-/// jitter. A <c>Retry-After</c> header (seconds or a date) takes precedence over the
-/// computed delay, and every delay is capped. Transport failures and timeouts become a
+/// Posts a request body, retrying <c>408</c>, <c>429</c> and every <c>5xx</c> (including
+/// <c>529</c>) with exponential backoff plus jitter, as TypeSafe's own SDKs do. A
+/// <c>retry-after-ms</c> header, else <c>Retry-After</c> (seconds or a date), takes
+/// precedence over the computed delay, and every delay is capped. Transport failures and timeouts become a
 /// <see cref="JevException"/>; cancellation by the caller's token stays an
 /// <see cref="OperationCanceledException"/>.
 /// </summary>
 internal sealed class RetryingSender
 {
-    private static readonly HashSet<int> Retryable = [429, 529];
     private static readonly TimeSpan BaseDelay = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan MaxDelay = TimeSpan.FromSeconds(30);
     private const int MaxJitterMilliseconds = 250;
@@ -45,12 +45,12 @@ internal sealed class RetryingSender
             }
 
             var status = (int)response.StatusCode;
-            if (!Retryable.Contains(status) || attempt >= _maxRetries)
+            if (!IsRetryable(status) || attempt >= _maxRetries)
             {
                 throw JevException.ForStatus(status, payload);
             }
 
-            var delay = DelayFor(response.Headers.RetryAfter, attempt, _time.GetUtcNow());
+            var delay = DelayFor(response.Headers, attempt, _time.GetUtcNow());
             await Task.Delay(delay, _time, ct).ConfigureAwait(false);
         }
     }
@@ -66,12 +66,20 @@ internal sealed class RetryingSender
         return Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
     }
 
-    private static TimeSpan DelayFor(RetryConditionHeaderValue? retryAfter, int attempt, DateTimeOffset now)
+    private static bool IsRetryable(int status) => status is 408 or 429 or >= 500;
+
+    private static TimeSpan DelayFor(HttpResponseHeaders headers, int attempt, DateTimeOffset now)
     {
-        var delay = RetryAfter(retryAfter, now) ?? BaseDelay * Math.Pow(2, Math.Min(attempt, 16));
+        var delay = RetryAfterMs(headers) ?? RetryAfter(headers.RetryAfter, now) ?? BaseDelay * Math.Pow(2, Math.Min(attempt, 16));
         var jittered = delay + TimeSpan.FromMilliseconds(Random.Shared.Next(MaxJitterMilliseconds));
         return jittered > MaxDelay ? MaxDelay : jittered;
     }
+
+    private static TimeSpan? RetryAfterMs(HttpResponseHeaders headers) =>
+        headers.TryGetValues("retry-after-ms", out var values)
+        && long.TryParse(values.FirstOrDefault(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var ms)
+            ? TimeSpan.FromMilliseconds(Math.Min(ms, (long)MaxDelay.TotalMilliseconds))
+            : null;
 
     private static TimeSpan? RetryAfter(RetryConditionHeaderValue? header, DateTimeOffset now) => header switch
     {
