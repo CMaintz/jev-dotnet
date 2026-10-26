@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- `JevClient.ModelsAsync()` lists the models and aliases the account can use (`GET /v1/models`) as `ModelInfo(Name, Description, ReleaseDate)`, with the same retries and typed errors as `SystemOneAsync`.
 - Typed `JevBadRequestException` (400), `JevPayloadTooLargeException` (413) and `JevServerException` (other 5xx). `408` and every `5xx` are now retried alongside `429`, and a `retry-after-ms` header is honored, matching TypeSafe's own SDKs.
 - **v0.1:** `JevClient` for TypeSafe AI's Jev System One model. `SystemOneAsync(state, questions)` sends a state plus typed questions and returns typed answers with calibrated confidence.
 - Three question primitives: `Choice` (map criteria, 1 to 255 options), `Score` (1 to 10 ordered levels), `Noul` (yes/no), validated on construction. Instructions, criteria and Noul glosses are text or structured JSON (anything that serializes to an object or array), copied on construction and exposed as `JsonElement`; a structured Score level reads back in `Legend` as compact JSON. Hand-written JSON so the `criteria` map/array and `probabilities` map/array shapes are handled exactly.

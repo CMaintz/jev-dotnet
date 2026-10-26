@@ -21,6 +21,8 @@ internal sealed class StubHandler : HttpMessageHandler
 
     public string? LastAuthorization { get; private set; }
 
+    public HttpMethod? LastRequestMethod { get; private set; }
+
     /// <summary>The clock handed to clients from <see cref="Client"/>; its timers record and fire at once.</summary>
     public RecordingTimeProvider Time { get; } = new();
 
@@ -76,6 +78,7 @@ internal sealed class StubHandler : HttpMessageHandler
     {
         Calls++;
         LastRequestUri = request.RequestUri;
+        LastRequestMethod = request.Method;
         LastAuthorization = request.Headers.Authorization?.ToString();
         LastRequestBody = request.Content is null
             ? null

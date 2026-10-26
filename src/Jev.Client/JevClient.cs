@@ -16,6 +16,8 @@ public sealed class JevClient : IDisposable
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly string _model;
+    private readonly Uri _systemOneEndpoint;
+    private readonly Uri _modelsEndpoint;
     private readonly RetryingSender _sender;
 
     /// <summary>Create a client from explicit options.</summary>
@@ -53,7 +55,9 @@ public sealed class JevClient : IDisposable
         _ownsHttp = http is null;
         _http = http ?? OwnedClient(options);
         _model = options.Model;
-        _sender = new RetryingSender(_http, Endpoint(options.BaseUrl), authorization, options.MaxRetries, options.TimeProvider);
+        _systemOneEndpoint = Endpoint(options.BaseUrl, "v1/systemone");
+        _modelsEndpoint = Endpoint(options.BaseUrl, "v1/models");
+        _sender = new RetryingSender(_http, authorization, options.MaxRetries, options.TimeProvider);
     }
 
     /// <summary>Create a client with an explicit API key and otherwise-default options.</summary>
@@ -86,8 +90,21 @@ public sealed class JevClient : IDisposable
         }
 
         var body = RequestWriter.Serialize(state, _model, questions);
-        var json = await _sender.SendAsync(body, cancellationToken).ConfigureAwait(false);
+        var json = await _sender.SendAsync(ApiRequest.PostJson(_systemOneEndpoint, body), cancellationToken).ConfigureAwait(false);
         return ResponseReader.Parse(json, questions);
+    }
+
+    /// <summary>
+    /// The models and aliases this account can use, in the order the service lists them.
+    /// Pass a returned <see cref="ModelInfo.Name"/> as <see cref="JevClientOptions.Model"/>.
+    /// Retried and mapped to typed errors like <see cref="SystemOneAsync"/>.
+    /// </summary>
+    /// <exception cref="JevException">Any network, timeout, HTTP, or response-format failure.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
+    public async Task<IReadOnlyList<ModelInfo>> ModelsAsync(CancellationToken cancellationToken = default)
+    {
+        var json = await _sender.SendAsync(ApiRequest.Get(_modelsEndpoint), cancellationToken).ConfigureAwait(false);
+        return ModelsReader.Parse(json);
     }
 
     /// <summary>Dispose the client's own <see cref="HttpClient"/>; one passed in is left open.</summary>
@@ -113,7 +130,7 @@ public sealed class JevClient : IDisposable
         };
 
     // A leading-slash relative Uri would replace BaseUrl's path, dropping e.g. a proxy prefix.
-    private static Uri Endpoint(Uri baseUrl) => new(baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/v1/systemone");
+    private static Uri Endpoint(Uri baseUrl, string path) => new(baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/') + "/" + path);
 
     private static string ResolveApiKey(string? configured)
     {
