@@ -189,6 +189,19 @@ public sealed class ThresholdsTests
     }
 
     [Fact]
+    public void A_structured_question_matches_its_recorded_definition()
+    {
+        var json = Fixture.Replace(
+            "\"team\": {\"type\": \"choice\", \"instructions\": \"Which team?\"",
+            "\"team\": {\"type\": \"choice\", \"instructions\": {\"task\": \"Which team?\", \"max\": 2}",
+            StringComparison.Ordinal);
+        var structured = new Choice(new { max = 2.0, task = "Which team?" }, new Dictionary<string, string> { ["billing"] = "Billing", ["tech"] = "Tech" });
+
+        Assert.Empty(JevThresholds.Parse(json).Pick(Ask(("team", structured))).Warnings);
+        Assert.Single(JevThresholds.Parse(json).Pick(Ask(("team", Team))).Warnings);
+    }
+
+    [Fact]
     public void Files_without_definitions_never_warn_about_rewording()
     {
         var file = JevThresholds.Parse(Without("definitions"));

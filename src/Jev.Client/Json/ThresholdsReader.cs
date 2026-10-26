@@ -33,7 +33,7 @@ internal sealed class ThresholdsReader
     {
         try
         {
-            return JsonDocument.Parse(json);
+            return JsonDocument.Parse(json, JevJson.ReadOptions);
         }
         catch (JsonException e)
         {

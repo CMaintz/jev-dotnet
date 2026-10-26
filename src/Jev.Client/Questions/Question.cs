@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Jev;
 
 /// <summary>
@@ -6,14 +8,30 @@ namespace Jev;
 /// <see cref="Score"/> for a position on an ordered scale, <see cref="Noul"/> for a
 /// yes/no probability. Independent questions sent together are evaluated in parallel.
 /// </summary>
+/// <remarks>
+/// Instructions and criteria are text, or structured JSON when definitions, contrasts
+/// or examples make the question clearer: pass any value that serializes to a JSON
+/// object or array, such as an anonymous object, a dictionary or a list. It is copied
+/// when the question is built, so later changes to it are not sent. Questions compare
+/// by content.
+/// </remarks>
 public abstract record Question
 {
-    private protected Question(string instructions)
+    private protected Question(object instructions)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(instructions);
-        Instructions = instructions;
+        Instructions = Prompts.Require(instructions, nameof(instructions));
     }
 
-    /// <summary>The judgment to make, in natural language. Reference nested state with backticked paths such as <c>ticket.messages[0].text</c>.</summary>
-    public string Instructions { get; }
+    /// <summary>
+    /// The judgment to make: a JSON string, or a structured object or array. Reference
+    /// nested state with backticked paths such as <c>ticket.messages[0].text</c>.
+    /// </summary>
+    public JsonElement Instructions { get; }
+
+    /// <inheritdoc />
+    public virtual bool Equals(Question? other) =>
+        other is not null && EqualityContract == other.EqualityContract && Prompts.Same(Instructions, other.Instructions);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(EqualityContract, Prompts.Hash(Instructions));
 }

@@ -11,7 +11,7 @@ internal static class DefinitionReader
 {
     public static Question? TryRead(JsonElement e)
     {
-        if (e.ValueKind != JsonValueKind.Object || OptString(e, "instructions") is not { } instructions)
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("instructions", out var instructions))
         {
             return null;
         }
@@ -32,46 +32,33 @@ internal static class DefinitionReader
         }
     }
 
-    private static Choice? ReadChoice(JsonElement e, string instructions)
+    private static Choice? ReadChoice(JsonElement e, JsonElement instructions)
     {
         if (!e.TryGetProperty("criteria", out var c) || c.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
-        var criteria = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var option in c.EnumerateObject())
-        {
-            if (option.Value.ValueKind != JsonValueKind.String)
-            {
-                return null;
-            }
-
-            criteria[option.Name] = option.Value.GetString()!;
-        }
-
+        var criteria = c.EnumerateObject().ToDictionary(option => option.Name, option => (object)option.Value, StringComparer.Ordinal);
         return new Choice(instructions, criteria);
     }
 
-    private static Score? ReadScore(JsonElement e, string instructions)
-    {
-        if (!e.TryGetProperty("criteria", out var c) || c.ValueKind != JsonValueKind.Array
-            || c.EnumerateArray().Any(level => level.ValueKind != JsonValueKind.String))
-        {
-            return null;
-        }
+    private static Score? ReadScore(JsonElement e, JsonElement instructions) =>
+        e.TryGetProperty("criteria", out var c) && c.ValueKind == JsonValueKind.Array
+            ? new Score(instructions, c.EnumerateArray().Select(level => (object)level).ToList())
+            : null;
 
-        return new Score(instructions, c.EnumerateArray().Select(level => level.GetString()!).ToList());
-    }
-
-    private static Noul ReadNoul(JsonElement e, string instructions)
+    private static Noul ReadNoul(JsonElement e, JsonElement instructions)
     {
         var criteria = e.TryGetProperty("criteria", out var c) && c.ValueKind == JsonValueKind.Object ? c : default;
         return criteria.ValueKind == JsonValueKind.Object
-            ? new Noul(instructions, OptString(criteria, "true"), OptString(criteria, "false"))
+            ? new Noul(instructions, OptValue(criteria, "true"), OptValue(criteria, "false"))
             : new Noul(instructions);
     }
 
     private static string? OptString(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static JsonElement? OptValue(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind != JsonValueKind.Null ? v : null;
 }

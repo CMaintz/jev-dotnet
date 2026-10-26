@@ -99,8 +99,25 @@ var text = response[id] switch
 ```
 
 `Choice` criteria is a map of option to description (1 to 255 options). `Score` criteria
-is an ordered list of 2 to 10 level descriptions, low to high. The model cannot pick an
+is an ordered list of 1 to 10 level descriptions, low to high. The model cannot pick an
 option you did not give it, so include a no-match option when nothing may fit.
+
+Instructions, option descriptions, levels and Noul glosses can also be structured JSON
+when definitions, contrasts or examples make the question clearer. Pass anything that
+serializes to a JSON object or array; it is validated and copied when the question is
+built, and exposed as a `JsonElement`:
+
+```csharp
+new Choice(
+    new { task = "Route this ticket to a team", ignore = new List<string> { "greetings", "signatures" } },
+    new Dictionary<string, object>
+    {
+        ["billing"] = new { covers = "charges and refunds", examples = new List<string> { "charged twice" } },
+        ["tech"] = "bugs and outages",
+    });
+```
+
+A structured Score level comes back in `Legend` as compact JSON text.
 
 ## Confidence
 

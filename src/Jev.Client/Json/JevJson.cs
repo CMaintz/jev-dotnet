@@ -15,4 +15,10 @@ internal static class JevJson
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
+
+    /// <summary>
+    /// For reading responses and thresholds files: twice the API's 64 levels per field,
+    /// since a legend or a recorded definition sits a few levels below the root.
+    /// </summary>
+    public static readonly JsonDocumentOptions ReadOptions = new() { MaxDepth = 128 };
 }
