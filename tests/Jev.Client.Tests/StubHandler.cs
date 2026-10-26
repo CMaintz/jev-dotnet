@@ -27,10 +27,15 @@ internal sealed class StubHandler : HttpMessageHandler
     /// <summary>Every retry wait the client asked for, in order.</summary>
     public List<TimeSpan> Waits => Time.Waits;
 
-    public StubHandler Enqueue(HttpStatusCode status, string body, RetryConditionHeaderValue? retryAfter = null)
+    public StubHandler Enqueue(HttpStatusCode status, string body, RetryConditionHeaderValue? retryAfter = null, string? retryAfterMs = null)
     {
         var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
         response.Headers.RetryAfter = retryAfter;
+        if (retryAfterMs is not null)
+        {
+            response.Headers.Add("retry-after-ms", retryAfterMs);
+        }
+
         _responses.Enqueue(response);
         return this;
     }

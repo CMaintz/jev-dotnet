@@ -69,7 +69,7 @@ public sealed class RetryTests
         var handler = new StubHandler().EnqueueWithBogusCharset(HttpStatusCode.BadGateway, "bad gateway");
         using var client = handler.Client(maxRetries: 0);
 
-        var error = await Assert.ThrowsAsync<JevException>(() => client.SystemOneAsync("s", OneNoul));
+        var error = await Assert.ThrowsAsync<JevServerException>(() => client.SystemOneAsync("s", OneNoul));
 
         Assert.Equal(502, error.StatusCode);
         Assert.Equal("bad gateway", error.ResponseBody);
@@ -95,7 +95,9 @@ public sealed class RetryTests
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized, typeof(JevAuthException))]
     [InlineData(HttpStatusCode.UnprocessableEntity, typeof(JevValidationException))]
-    [InlineData(HttpStatusCode.InternalServerError, typeof(JevException))]
+    [InlineData(HttpStatusCode.BadRequest, typeof(JevBadRequestException))]
+    [InlineData(HttpStatusCode.RequestEntityTooLarge, typeof(JevPayloadTooLargeException))]
+    [InlineData(HttpStatusCode.Forbidden, typeof(JevException))]
     public async Task Non_retryable_statuses_fail_immediately_with_their_code(HttpStatusCode status, Type expected)
     {
         var handler = new StubHandler().Enqueue(status, "boom");
@@ -106,6 +108,37 @@ public sealed class RetryTests
         Assert.Equal(1, handler.Calls);
         Assert.Equal((int)status, ((JevException)error).StatusCode);
         Assert.Equal("boom", ((JevException)error).ResponseBody);
+    }
+
+    [Fact]
+    public async Task Server_errors_and_request_timeouts_are_retried()
+    {
+        var handler = new StubHandler()
+            .Enqueue(HttpStatusCode.InternalServerError, "{}")
+            .Enqueue(HttpStatusCode.ServiceUnavailable, "{}")
+            .Enqueue(HttpStatusCode.RequestTimeout, "{}");
+        using var client = handler.Client(maxRetries: 3);
+        await client.SystemOneAsync("s", OneNoul);
+        Assert.Equal(4, handler.Calls);
+
+        var down = new StubHandler().Enqueue(HttpStatusCode.BadGateway, "bad gateway").Enqueue(HttpStatusCode.BadGateway, "bad gateway");
+        using var downClient = down.Client(maxRetries: 1);
+        var error = await Assert.ThrowsAsync<JevServerException>(() => downClient.SystemOneAsync("s", OneNoul));
+        Assert.Equal(2, down.Calls);
+        Assert.Equal(502, error.StatusCode);
+        Assert.Equal("bad gateway", error.ResponseBody);
+    }
+
+    [Fact]
+    public async Task Retry_after_milliseconds_takes_precedence()
+    {
+        var handler = new StubHandler()
+            .Enqueue(HttpStatusCode.TooManyRequests, "{}", new RetryConditionHeaderValue(TimeSpan.FromSeconds(9)), retryAfterMs: "1500");
+        using var client = handler.Client(maxRetries: 1);
+
+        await client.SystemOneAsync("s", OneNoul);
+
+        Assert.InRange(handler.Waits[0], TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(1750));
     }
 
     [Fact]

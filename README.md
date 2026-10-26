@@ -179,14 +179,18 @@ an empty question map, state that cannot be written as JSON, or an invalid optio
 
 | Exception | HTTP | Meaning |
 | --- | --- | --- |
+| `JevBadRequestException` | 400 | the body broke a request rule; `max_tokens_exceeded` in the body means it is over the model's context length |
 | `JevAuthException` | 401 | missing or invalid API key |
+| `JevPayloadTooLargeException` | 413 | the body is over 32 MiB |
 | `JevValidationException` | 422 | the request was rejected as malformed |
 | `JevRateLimitException` | 429 | rate limited; retries exhausted |
 | `JevOverloadedException` | 529 | service overloaded; retries exhausted |
+| `JevServerException` | other 5xx | the service failed; retries exhausted |
 
-`429` and `529` are retried automatically with exponential backoff and jitter, honoring
-`Retry-After` (seconds or a date); each wait is capped at 30 seconds. `MaxRetries` is
-configurable.
+Any other status is a plain `JevException` carrying it. `408`, `429` and every `5xx` are
+retried automatically with exponential backoff and jitter, as TypeSafe's own SDKs do,
+honoring `retry-after-ms` or `Retry-After` (seconds or a date); each wait is capped at 30
+seconds. `MaxRetries` is configurable.
 
 ## Configuration
 
