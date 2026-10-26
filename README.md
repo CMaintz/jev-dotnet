@@ -232,6 +232,24 @@ services.AddHttpClient<JevClient>()
 using var client = new JevClient(httpClient, new JevClientOptions { ApiKey = "sk-..." });
 ```
 
+### Per-call options
+
+`SystemOneOptions` changes one request without a second client. `Model` overrides the
+client's model for that call, for example to try `jev-preview` or a pinned version.
+`LongContext` sends `TypeSafe-Danger-Zone-Long-Context: true`, which raises the context
+limits; TypeSafe advises turning it on only for the requests that need it.
+
+```csharp
+var response = await client.SystemOneAsync(
+    longTranscript,
+    questions,
+    new SystemOneOptions { Model = "jev-preview", LongContext = true });
+```
+
+A blank `Model` throws `ArgumentException`; leave it null to keep the client's model. If
+you gate with jev-eval thresholds, pass the model you actually called to
+`JevThresholds.Pick` so a mismatch shows up in `Warnings`.
+
 To see which models and aliases your key can use, list them:
 
 ```csharp

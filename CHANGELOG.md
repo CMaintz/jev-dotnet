@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Per-call `SystemOneOptions`: a `SystemOneAsync(state, questions, options)` overload that overrides the model for one request (e.g. `jev-preview` or a pinned version) or turns on long context (`TypeSafe-Danger-Zone-Long-Context: true`) for that request only.
 - `JevClient.ModelsAsync()` lists the models and aliases the account can use (`GET /v1/models`) as `ModelInfo(Name, Description, ReleaseDate)`, with the same retries and typed errors as `SystemOneAsync`.
 - Typed `JevBadRequestException` (400), `JevPayloadTooLargeException` (413) and `JevServerException` (other 5xx). `408` and every `5xx` are now retried alongside `429`, and a `retry-after-ms` header is honored, matching TypeSafe's own SDKs.
 - **v0.1:** `JevClient` for TypeSafe AI's Jev System One model. `SystemOneAsync(state, questions)` sends a state plus typed questions and returns typed answers with calibrated confidence.

@@ -23,6 +23,9 @@ internal sealed class StubHandler : HttpMessageHandler
 
     public HttpMethod? LastRequestMethod { get; private set; }
 
+    /// <summary>The last request's headers, content headers included, each value comma-joined.</summary>
+    public Dictionary<string, string> LastRequestHeaders { get; private set; } = [];
+
     /// <summary>The clock handed to clients from <see cref="Client"/>; its timers record and fire at once.</summary>
     public RecordingTimeProvider Time { get; } = new();
 
@@ -79,6 +82,8 @@ internal sealed class StubHandler : HttpMessageHandler
         Calls++;
         LastRequestUri = request.RequestUri;
         LastRequestMethod = request.Method;
+        LastRequestHeaders = request.Headers.Concat(request.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
+            .ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
         LastAuthorization = request.Headers.Authorization?.ToString();
         LastRequestBody = request.Content is null
             ? null
