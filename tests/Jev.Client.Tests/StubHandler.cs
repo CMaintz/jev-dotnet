@@ -15,7 +15,11 @@ internal sealed class StubHandler : HttpMessageHandler
 
     public int Calls { get; private set; }
 
+    /// <summary>The last request body as text, inflated first when it was sent gzipped, as the API reads it.</summary>
     public string? LastRequestBody { get; private set; }
+
+    /// <summary>The last request body exactly as sent.</summary>
+    public byte[]? LastRequestBytes { get; private set; }
 
     public Uri? LastRequestUri { get; private set; }
 
@@ -77,6 +81,18 @@ internal sealed class StubHandler : HttpMessageHandler
         TimeProvider = Time,
     });
 
+    private static string Decode(byte[] body, ICollection<string> encodings)
+    {
+        if (!encodings.Contains("gzip"))
+        {
+            return System.Text.Encoding.UTF8.GetString(body);
+        }
+
+        using var gzip = new System.IO.Compression.GZipStream(new MemoryStream(body), System.IO.Compression.CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip, System.Text.Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Calls++;
@@ -85,9 +101,8 @@ internal sealed class StubHandler : HttpMessageHandler
         LastRequestHeaders = request.Headers.Concat(request.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
             .ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
         LastAuthorization = request.Headers.Authorization?.ToString();
-        LastRequestBody = request.Content is null
-            ? null
-            : await request.Content.ReadAsStringAsync(cancellationToken);
+        LastRequestBytes = request.Content is null ? null : await request.Content.ReadAsByteArrayAsync(cancellationToken);
+        LastRequestBody = LastRequestBytes is null ? null : Decode(LastRequestBytes, request.Content!.Headers.ContentEncoding);
         if (_failure is not null)
         {
             throw _failure;
