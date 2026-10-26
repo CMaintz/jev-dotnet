@@ -21,6 +21,13 @@ public sealed class JevClientOptions
     /// </summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// Gzip request bodies of 1024 bytes or more and send them with <c>Content-Encoding: gzip</c>,
+    /// which TypeSafe's API accepts. On by default; turn it off when a proxy or gateway at
+    /// <see cref="BaseUrl"/> does not accept compressed request bodies.
+    /// </summary>
+    public bool CompressRequests { get; set; } = true;
+
     /// <summary>Maximum retries after a 408, 429 or 5xx before giving up; zero disables retrying.</summary>
     public int MaxRetries { get; set; } = 3;
 

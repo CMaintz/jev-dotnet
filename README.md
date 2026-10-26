@@ -201,11 +201,18 @@ using var client = new JevClient(new JevClientOptions
     Model = "jev-latest",                         // tracks the recommended model
     Timeout = TimeSpan.FromSeconds(30),
     MaxRetries = 3,
+    CompressRequests = true,                      // gzip bodies of 1 KiB or more
     BaseUrl = new Uri("https://api.typesafe.ai"),   // e.g. a proxy; its path prefix is kept
     Handler = customHandler,                      // inject an HttpMessageHandler to test offline
     TimeProvider = fakeTime,                      // drive retry waits from a test clock
 });
 ```
+
+Request bodies of 1024 bytes or more are sent gzipped with `Content-Encoding: gzip`, which
+cuts upload time for large states (TypeSafe's 32 MiB limit applies to the body both before
+and after compression). Gzip is built into .NET, so this adds no dependency. Set
+`CompressRequests = false` if a proxy or gateway at `BaseUrl` does not accept compressed
+request bodies.
 
 Options are validated when the client is created. A `Handler` you pass in stays yours:
 the client does not dispose it.

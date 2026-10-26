@@ -14,11 +14,15 @@ public sealed class JevClient : IDisposable
     private const string EnvKey = "TYPESAFE_API_KEY";
     private const string LongContextHeader = "TypeSafe-Danger-Zone-Long-Context";
 
+    // Below this, gzip's framing and the server's inflate step cost more than they save.
+    private const int MinCompressedBytes = 1024;
+
     private static readonly SystemOneOptions DefaultOptions = new();
 
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly string _model;
+    private readonly bool _compressRequests;
     private readonly Uri _systemOneEndpoint;
     private readonly Uri _modelsEndpoint;
     private readonly RetryingSender _sender;
@@ -58,6 +62,7 @@ public sealed class JevClient : IDisposable
         _ownsHttp = http is null;
         _http = http ?? OwnedClient(options);
         _model = options.Model;
+        _compressRequests = options.CompressRequests;
         _systemOneEndpoint = Endpoint(options.BaseUrl, "v1/systemone");
         _modelsEndpoint = Endpoint(options.BaseUrl, "v1/models");
         _sender = new RetryingSender(_http, authorization, options.MaxRetries, options.TimeProvider);
@@ -149,10 +154,17 @@ public sealed class JevClient : IDisposable
     private ApiRequest SystemOneRequest(byte[] body, SystemOneOptions options)
     {
         var request = ApiRequest.PostJson(_systemOneEndpoint, body);
-        return options.LongContext
-            ? request with { Headers = new Dictionary<string, string> { [LongContextHeader] = "true" } }
-            : request;
+        if (options.LongContext)
+        {
+            request = request with { Headers = new Dictionary<string, string> { [LongContextHeader] = "true" } };
+        }
+
+        return Compressed(request);
     }
+
+    // Compressed once per call, here, because the sender resends these same bytes on a retry.
+    private ApiRequest Compressed(ApiRequest request) =>
+        _compressRequests && request.Body is { Length: >= MinCompressedBytes } ? request.Gzipped() : request;
 
     private static HttpClient Required(HttpClient httpClient)
     {
