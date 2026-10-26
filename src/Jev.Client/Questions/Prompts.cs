@@ -7,7 +7,8 @@ namespace Jev;
 /// Validates and freezes question instructions and criteria. Each is text, or structured
 /// JSON: any value the serializer writes as a JSON object or array (an anonymous object,
 /// a dictionary, a list, a <see cref="JsonElement"/>). The result is a detached
-/// <see cref="JsonElement"/>, so a caller's later changes never reach the question.
+/// <see cref="JsonElement"/>, so a caller's later changes never reach the question. Any
+/// <see cref="Image"/> inside is written as its reference and added to the given set.
 /// </summary>
 internal static class Prompts
 {
@@ -18,17 +19,17 @@ internal static class Prompts
     private static readonly JsonSerializerOptions Options = new(JevJson.Options) { MaxDepth = MaxDepth * 2 };
 
     /// <summary>Instructions: non-blank text, or a non-empty JSON object or array.</summary>
-    public static JsonElement Require(object? value, string name) => Require(value, name, 0);
+    public static JsonElement Require(object? value, string name, ImageSet images) => Require(value, name, 0, images);
 
     /// <summary>
     /// One criteria value (an option, a level, a gloss). It already sits one level inside
     /// <c>criteria</c>, which the 64-level limit applies to as a whole.
     /// </summary>
-    public static JsonElement Criterion(object? value, string name) => Require(value, name, 1);
+    public static JsonElement Criterion(object? value, string name, ImageSet images) => Require(value, name, 1, images);
 
     /// <summary>Like <see cref="Criterion"/> but null stays null, for optional glosses.</summary>
-    public static JsonElement? OptionalCriterion(object? value, string name) =>
-        value is null ? null : Criterion(value, name);
+    public static JsonElement? OptionalCriterion(object? value, string name, ImageSet images) =>
+        value is null ? null : Criterion(value, name, images);
 
     /// <summary>
     /// Whether two values mean the same JSON: object keys in any order, numbers by value
@@ -55,10 +56,10 @@ internal static class Prompts
         _ => value.ValueKind.GetHashCode(),
     };
 
-    private static JsonElement Require(object? value, string name, int depth)
+    private static JsonElement Require(object? value, string name, int depth, ImageSet images)
     {
         ArgumentNullException.ThrowIfNull(value, name);
-        var element = Serialize(value, name);
+        var element = Serialize(value, name, images);
         var usable = element.ValueKind switch
         {
             JsonValueKind.String => !string.IsNullOrWhiteSpace(element.GetString()),
@@ -80,10 +81,11 @@ internal static class Prompts
     }
 
     // Re-serializing a JsonElement too yields compact JSON, so equal content compares equal.
-    private static JsonElement Serialize(object value, string name)
+    private static JsonElement Serialize(object value, string name, ImageSet images)
     {
         try
         {
+            using var collector = ImageCollector.Into(images);
             return JsonSerializer.SerializeToElement(value, Options);
         }
         catch (Exception e) when (e is NotSupportedException or JsonException or ArgumentException or InvalidOperationException)

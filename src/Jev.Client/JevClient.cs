@@ -116,8 +116,8 @@ public sealed class JevClient : IDisposable
             throw new ArgumentException("At least one question is required, and none may be null.", nameof(questions));
         }
 
-        var body = RequestWriter.Serialize(state, options.Model ?? _model, questions);
-        var json = await _sender.SendAsync(SystemOneRequest(body, options, questions), cancellationToken).ConfigureAwait(false);
+        var written = RequestWriter.Serialize(state, options.Model ?? _model, questions);
+        var json = await _sender.SendAsync(SystemOneRequest(written, options, questions), cancellationToken).ConfigureAwait(false);
         return ResponseReader.Parse(json, questions);
     }
 
@@ -152,7 +152,17 @@ public sealed class JevClient : IDisposable
         }
     }
 
-    private ApiRequest SystemOneRequest(byte[] body, SystemOneOptions options, IReadOnlyDictionary<string, Question> questions)
+    // Plain JSON unless there are images to upload; the API wants those as file parts.
+    private ApiRequest SystemOneRequest(WrittenRequest written, SystemOneOptions options, IReadOnlyDictionary<string, Question> questions)
+    {
+        var request = written.Images.Count == 0
+            ? ApiRequest.PostJson(_systemOneEndpoint, written.Json)
+            : MultipartWriter.Post(_systemOneEndpoint, written);
+        return Compressed(request with { Headers = Headers(written, options, questions) });
+    }
+
+    private static Dictionary<string, string> Headers(
+        WrittenRequest written, SystemOneOptions options, IReadOnlyDictionary<string, Question> questions)
     {
         var headers = new Dictionary<string, string>();
         if (options.LongContext)
@@ -160,12 +170,12 @@ public sealed class JevClient : IDisposable
             headers[LongContextHeader] = "true";
         }
 
-        if (questions.Values.Any(q => q is Box))
+        if (written.Images.Count > 0 || questions.Values.Any(q => q is Box))
         {
             headers[ImagesHeader] = "true";
         }
 
-        return Compressed(ApiRequest.PostJson(_systemOneEndpoint, body) with { Headers = headers });
+        return headers;
     }
 
     // Compressed once per call, here, because the sender resends these same bytes on a retry.

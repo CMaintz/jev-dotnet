@@ -28,7 +28,7 @@ public sealed record Score : Question
                 $"A Score needs between {MinLevels} and {MaxLevels} ordered levels.", nameof(criteria));
         }
 
-        Criteria = Array.AsReadOnly(criteria.Select((level, i) => Prompts.Criterion(level, $"level {i}")).ToArray());
+        Criteria = Array.AsReadOnly(criteria.Select((level, i) => Prompts.Criterion(level, $"level {i}", Images)).ToArray());
     }
 
     /// <summary>Ordered level descriptions, low to high. Sent as the wire <c>criteria</c> array.</summary>

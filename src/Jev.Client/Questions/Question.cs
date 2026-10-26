@@ -19,8 +19,14 @@ public abstract record Question
 {
     private protected Question(object instructions)
     {
-        Instructions = Prompts.Require(instructions, nameof(instructions));
+        Instructions = Prompts.Require(instructions, nameof(instructions), Images);
     }
+
+    /// <summary>
+    /// The images in the instructions and criteria. The frozen JSON holds only their
+    /// references, so the question keeps the images themselves for the request's assets.
+    /// </summary>
+    internal ImageSet Images { get; } = new();
 
     /// <summary>
     /// The judgment to make: a JSON string, or a structured object or array. Reference
