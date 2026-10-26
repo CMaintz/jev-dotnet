@@ -55,6 +55,16 @@ public sealed class ResponseTests
     }
 
     [Fact]
+    public async Task Reads_score_probabilities_keyed_by_level_in_level_order()
+    {
+        const string body = """
+        {"answers":{"anger":{"score":1.7,"probabilities":{"2":0.8,"0":0.1,"1":0.1},"confidence":0.55}}}
+        """;
+
+        Assert.Equal([0.1, 0.1, 0.8], (await Parse(body)).GetScore("anger").Probabilities);
+    }
+
+    [Fact]
     public async Task Reads_a_noul_answer_and_treats_missing_metadata_as_null()
     {
         var resp = await Parse("{\"answers\":{\"refund\":{\"noul\":0.85}}}");
@@ -139,6 +149,7 @@ public sealed class ResponseTests
     [InlineData("{\"answers\":{\"refund\":{\"noul\":1e400}}}")]
     [InlineData("{\"answers\":{\"refund\":{}}}")]
     [InlineData("{\"answers\":{\"anger\":{\"score\":1,\"probabilities\":[\"x\"]}}}")]
+    [InlineData("{\"answers\":{\"anger\":{\"score\":1,\"probabilities\":{\"high\":1.0}}}}")]
     public async Task Malformed_bodies_surface_as_JevException_with_the_body(string body)
     {
         var error = await Assert.ThrowsAsync<JevException>(() => Parse(body));
