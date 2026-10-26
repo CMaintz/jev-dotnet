@@ -12,6 +12,9 @@ namespace Jev;
 public sealed class JevClient : IDisposable
 {
     private const string EnvKey = "TYPESAFE_API_KEY";
+    private const string LongContextHeader = "TypeSafe-Danger-Zone-Long-Context";
+
+    private static readonly SystemOneOptions DefaultOptions = new();
 
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
@@ -77,27 +80,45 @@ public sealed class JevClient : IDisposable
     /// <exception cref="ArgumentException">There are no questions, a question is null, or the state cannot be written as JSON.</exception>
     /// <exception cref="JevException">Any network, timeout, HTTP, or response-format failure.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
+    public Task<SystemOneResponse> SystemOneAsync(
+        object state,
+        IReadOnlyDictionary<string, Question> questions,
+        CancellationToken cancellationToken = default) =>
+        SystemOneAsync(state, questions, DefaultOptions, cancellationToken);
+
+    /// <summary>
+    /// Evaluate <paramref name="questions"/> against <paramref name="state"/> with per-call
+    /// <paramref name="options"/>: a different model, or long context, for this request only.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// There are no questions, a question is null, the state cannot be written as JSON, or
+    /// <see cref="SystemOneOptions.Model"/> is blank.
+    /// </exception>
+    /// <exception cref="JevException">Any network, timeout, HTTP, or response-format failure.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     public async Task<SystemOneResponse> SystemOneAsync(
         object state,
         IReadOnlyDictionary<string, Question> questions,
+        SystemOneOptions options,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(questions);
+        Validate(options);
         if (questions.Count == 0 || questions.Values.Any(q => q is null))
         {
             throw new ArgumentException("At least one question is required, and none may be null.", nameof(questions));
         }
 
-        var body = RequestWriter.Serialize(state, _model, questions);
-        var json = await _sender.SendAsync(ApiRequest.PostJson(_systemOneEndpoint, body), cancellationToken).ConfigureAwait(false);
+        var body = RequestWriter.Serialize(state, options.Model ?? _model, questions);
+        var json = await _sender.SendAsync(SystemOneRequest(body, options), cancellationToken).ConfigureAwait(false);
         return ResponseReader.Parse(json, questions);
     }
 
     /// <summary>
     /// The models and aliases this account can use, in the order the service lists them.
     /// Pass a returned <see cref="ModelInfo.Name"/> as <see cref="JevClientOptions.Model"/>.
-    /// Retried and mapped to typed errors like <see cref="SystemOneAsync"/>.
+    /// Retried and mapped to typed errors like <c>SystemOneAsync</c>.
     /// </summary>
     /// <exception cref="JevException">Any network, timeout, HTTP, or response-format failure.</exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
@@ -114,6 +135,23 @@ public sealed class JevClient : IDisposable
         {
             _http.Dispose();
         }
+    }
+
+    private static void Validate(SystemOneOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.Model is not null && string.IsNullOrWhiteSpace(options.Model))
+        {
+            throw new ArgumentException("SystemOneOptions.Model must not be blank; leave it null to use the client's model.", nameof(options));
+        }
+    }
+
+    private ApiRequest SystemOneRequest(byte[] body, SystemOneOptions options)
+    {
+        var request = ApiRequest.PostJson(_systemOneEndpoint, body);
+        return options.LongContext
+            ? request with { Headers = new Dictionary<string, string> { [LongContextHeader] = "true" } }
+            : request;
     }
 
     private static HttpClient Required(HttpClient httpClient)

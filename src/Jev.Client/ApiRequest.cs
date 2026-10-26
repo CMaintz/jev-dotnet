@@ -15,6 +15,9 @@ internal sealed record ApiRequest(HttpMethod Method, Uri Uri)
     /// <summary>The body's media type; required with <see cref="Body"/>.</summary>
     public MediaTypeHeaderValue? ContentType { get; init; }
 
+    /// <summary>Extra request headers, such as TypeSafe's opt-in <c>Danger-Zone</c> flags.</summary>
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>();
+
     public static ApiRequest Get(Uri uri) => new(HttpMethod.Get, uri);
 
     public static ApiRequest PostJson(Uri uri, byte[] body) =>
@@ -24,6 +27,11 @@ internal sealed record ApiRequest(HttpMethod Method, Uri Uri)
     {
         var message = new HttpRequestMessage(Method, Uri);
         message.Headers.Authorization = authorization;
+        foreach (var (name, value) in Headers)
+        {
+            message.Headers.Add(name, value);
+        }
+
         if (Body is not null)
         {
             message.Content = new ByteArrayContent(Body);
