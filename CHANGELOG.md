@@ -6,6 +6,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- `Box` questions (Jev 1.14+, experimental "dreamer-ready" per TypeSafe) find where something is in an image. `BoxAnswer(Top, Bottom, Left, Right, Confidence)` with `IsConfident(threshold)`, `SystemOneResponse.GetBox(id)` and `Boxes()`. A request with a Box sends `TypeSafe-Danger-Zone-Images: true`. `JevThresholds.Pick` gates only on Choice and Score questions, so a Box is never gated.
 - Request bodies of 1024 bytes or more are gzipped (`Content-Encoding: gzip`), once per call so retries resend the same bytes. On by default; `JevClientOptions.CompressRequests = false` turns it off for a proxy or gateway that does not accept compressed bodies.
 - Per-call `SystemOneOptions`: a `SystemOneAsync(state, questions, options)` overload that overrides the model for one request (e.g. `jev-preview` or a pinned version) or turns on long context (`TypeSafe-Danger-Zone-Long-Context: true`) for that request only.
 - `JevClient.ModelsAsync()` lists the models and aliases the account can use (`GET /v1/models`) as `ModelInfo(Name, Description, ReleaseDate)`, with the same retries and typed errors as `SystemOneAsync`.

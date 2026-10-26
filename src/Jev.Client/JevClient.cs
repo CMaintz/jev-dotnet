@@ -13,6 +13,7 @@ public sealed class JevClient : IDisposable
 {
     private const string EnvKey = "TYPESAFE_API_KEY";
     private const string LongContextHeader = "TypeSafe-Danger-Zone-Long-Context";
+    private const string ImagesHeader = "TypeSafe-Danger-Zone-Images";
 
     // Below this, gzip's framing and the server's inflate step cost more than they save.
     private const int MinCompressedBytes = 1024;
@@ -116,7 +117,7 @@ public sealed class JevClient : IDisposable
         }
 
         var body = RequestWriter.Serialize(state, options.Model ?? _model, questions);
-        var json = await _sender.SendAsync(SystemOneRequest(body, options), cancellationToken).ConfigureAwait(false);
+        var json = await _sender.SendAsync(SystemOneRequest(body, options, questions), cancellationToken).ConfigureAwait(false);
         return ResponseReader.Parse(json, questions);
     }
 
@@ -151,15 +152,20 @@ public sealed class JevClient : IDisposable
         }
     }
 
-    private ApiRequest SystemOneRequest(byte[] body, SystemOneOptions options)
+    private ApiRequest SystemOneRequest(byte[] body, SystemOneOptions options, IReadOnlyDictionary<string, Question> questions)
     {
-        var request = ApiRequest.PostJson(_systemOneEndpoint, body);
+        var headers = new Dictionary<string, string>();
         if (options.LongContext)
         {
-            request = request with { Headers = new Dictionary<string, string> { [LongContextHeader] = "true" } };
+            headers[LongContextHeader] = "true";
         }
 
-        return Compressed(request);
+        if (questions.Values.Any(q => q is Box))
+        {
+            headers[ImagesHeader] = "true";
+        }
+
+        return Compressed(ApiRequest.PostJson(_systemOneEndpoint, body) with { Headers = headers });
     }
 
     // Compressed once per call, here, because the sender resends these same bytes on a retry.

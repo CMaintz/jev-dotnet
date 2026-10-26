@@ -5,9 +5,9 @@ namespace Jev;
 /// <summary>
 /// The result of one <c>system_one</c> request: every answer keyed by the question id
 /// you sent, plus token usage. Use the typed accessors (<see cref="GetChoice"/>,
-/// <see cref="GetScore"/>, <see cref="GetNoul"/>) for a known question, the indexer for
-/// any answer, or the type-filtered views (<see cref="Choices"/>, <see cref="Scores"/>,
-/// <see cref="Nouls"/>) to iterate one kind.
+/// <see cref="GetScore"/>, <see cref="GetNoul"/>, <see cref="GetBox"/>) for a known question,
+/// the indexer for any answer, or the type-filtered views (<see cref="Choices"/>,
+/// <see cref="Scores"/>, <see cref="Nouls"/>, <see cref="Boxes"/>) to iterate one kind.
 /// </summary>
 public sealed record SystemOneResponse
 {
@@ -44,6 +44,9 @@ public sealed record SystemOneResponse
     /// <summary>The answer to the <see cref="Noul"/> asked under <paramref name="questionId"/>; throws like <see cref="GetChoice"/>.</summary>
     public NoulAnswer GetNoul(string questionId) => Get<NoulAnswer>(questionId);
 
+    /// <summary>The answer to the <see cref="Box"/> asked under <paramref name="questionId"/>; throws like <see cref="GetChoice"/>.</summary>
+    public BoxAnswer GetBox(string questionId) => Get<BoxAnswer>(questionId);
+
     /// <summary>Every <see cref="ChoiceAnswer"/>, keyed by question id, as a new dictionary.</summary>
     public IReadOnlyDictionary<string, ChoiceAnswer> Choices() => Filter<ChoiceAnswer>();
 
@@ -52,6 +55,9 @@ public sealed record SystemOneResponse
 
     /// <summary>Every <see cref="NoulAnswer"/>, keyed by question id, as a new dictionary.</summary>
     public IReadOnlyDictionary<string, NoulAnswer> Nouls() => Filter<NoulAnswer>();
+
+    /// <summary>Every <see cref="BoxAnswer"/>, keyed by question id, as a new dictionary.</summary>
+    public IReadOnlyDictionary<string, BoxAnswer> Boxes() => Filter<BoxAnswer>();
 
     /// <inheritdoc />
     public bool Equals(SystemOneResponse? other) =>

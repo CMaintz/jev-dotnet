@@ -6,8 +6,8 @@ namespace Jev;
 /// The confidence gate picked by <see cref="JevThresholds.Pick"/> for your questions, with
 /// what jev-eval measured it buys. A row is covered (decided automatically) when its
 /// confidence is at or above <see cref="Threshold"/>; below it, escalate. Row confidence is
-/// the lowest choice/score confidence across <see cref="QuestionIds"/>; nouls never take
-/// part. Log <see cref="Describe"/> and <see cref="Warnings"/> next to your results.
+/// the lowest choice/score confidence across <see cref="QuestionIds"/>; nouls and boxes
+/// never take part. Log <see cref="Describe"/> and <see cref="Warnings"/> next to your results.
 /// </summary>
 public sealed record ThresholdGate
 {

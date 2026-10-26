@@ -65,8 +65,17 @@ internal sealed class ResponseReader
         Score => new ScoreAnswer(
             RequireDouble(e, "score"), ReadProbabilityList(e), ReadLegend(e), OptDouble(e, "confidence")),
         Noul => new NoulAnswer(RequireDouble(e, "noul")),
+        Box => ReadBox(e),
         _ => throw new InvalidOperationException($"Unknown question type {question.GetType().Name}."),
     };
+
+    private BoxAnswer ReadBox(JsonElement e)
+    {
+        var box = RequireObject(e.TryGetProperty("box", out var found) ? found : default, "box");
+        return new BoxAnswer(
+            RequireDouble(box, "top"), RequireDouble(box, "bottom"), RequireDouble(box, "left"), RequireDouble(box, "right"),
+            OptDouble(e, "confidence"));
+    }
 
     private Dictionary<string, double> ReadProbabilityMap(JsonElement e)
     {

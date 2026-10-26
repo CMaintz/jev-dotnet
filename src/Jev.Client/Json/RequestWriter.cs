@@ -64,6 +64,7 @@ internal static class RequestWriter
         Choice => "choice",
         Score => "score",
         Noul => "noul",
+        Box => "box",
         _ => throw new ArgumentException($"Unknown question type {question.GetType().Name}.", nameof(question)),
     };
 

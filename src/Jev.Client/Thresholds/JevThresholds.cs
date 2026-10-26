@@ -67,7 +67,7 @@ public sealed class JevThresholds
     /// <summary>
     /// The gate for <paramref name="questions"/>: with one choice/score question, that
     /// question's own gate; with several, the composite gate, which must have
-    /// been measured on exactly those questions. Nouls are ignored. A model mismatch or a
+    /// been measured on exactly those questions. Nouls and boxes are ignored. A model mismatch or a
     /// question reworded since it was measured is reported in
     /// <see cref="ThresholdGate.Warnings"/> rather than thrown.
     /// </summary>
