@@ -65,6 +65,18 @@ public sealed class ResponseTests
     }
 
     [Fact]
+    public async Task Writes_a_structured_legend_level_as_compact_json()
+    {
+        const string body = """
+        {"answers":{"anger":{"score":1,"legend":{"0":"calm","1":{"level": "blå", "signs": ["caps"]}}}}}
+        """;
+        var answer = (await Parse(body)).GetScore("anger");
+
+        Assert.Equal("calm", answer.Legend["0"]);
+        Assert.Equal("""{"level":"blå","signs":["caps"]}""", answer.Legend["1"]);
+    }
+
+    [Fact]
     public async Task Reads_a_noul_answer_and_treats_missing_metadata_as_null()
     {
         var resp = await Parse("{\"answers\":{\"refund\":{\"noul\":0.85}}}");

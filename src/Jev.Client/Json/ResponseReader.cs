@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace Jev.Json;
@@ -35,7 +36,7 @@ internal sealed class ResponseReader
     {
         try
         {
-            return JsonDocument.Parse(_body);
+            return JsonDocument.Parse(_body, JevJson.ReadOptions);
         }
         catch (JsonException e)
         {
@@ -119,6 +120,9 @@ internal sealed class ResponseReader
     private int Level(string key) =>
         key is [>= '0' and <= '9'] ? key[0] - '0' : throw Malformed($"expected a score level number but got \"{key}\"");
 
+    // Legend text is for people, so non-ASCII stays readable rather than \u-escaped.
+    private static readonly JsonSerializerOptions ReadableJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     private static Dictionary<string, string> ReadLegend(JsonElement e)
     {
         var map = new Dictionary<string, string>();
@@ -126,7 +130,10 @@ internal sealed class ResponseReader
         {
             foreach (var entry in m.EnumerateObject())
             {
-                map[entry.Name] = entry.Value.ToString();
+                // A structured level is given as compact JSON text.
+                map[entry.Name] = entry.Value.ValueKind == JsonValueKind.String
+                    ? entry.Value.GetString()!
+                    : JsonSerializer.Serialize(entry.Value, ReadableJson);
             }
         }
 

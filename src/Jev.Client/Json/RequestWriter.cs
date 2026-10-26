@@ -53,7 +53,8 @@ internal static class RequestWriter
     {
         w.WriteStartObject();
         w.WriteString("type", WireType(question));
-        w.WriteString("instructions", question.Instructions);
+        w.WritePropertyName("instructions");
+        question.Instructions.WriteTo(w);
         WriteCriteria(w, question);
         w.WriteEndObject();
     }
@@ -82,25 +83,26 @@ internal static class RequestWriter
         }
     }
 
-    private static void WriteMapCriteria(Utf8JsonWriter w, IReadOnlyDictionary<string, string> criteria)
+    private static void WriteMapCriteria(Utf8JsonWriter w, IReadOnlyDictionary<string, JsonElement> criteria)
     {
         w.WritePropertyName("criteria");
         w.WriteStartObject();
         foreach (var (option, description) in criteria)
         {
-            w.WriteString(option, description);
+            w.WritePropertyName(option);
+            description.WriteTo(w);
         }
 
         w.WriteEndObject();
     }
 
-    private static void WriteArrayCriteria(Utf8JsonWriter w, IReadOnlyList<string> levels)
+    private static void WriteArrayCriteria(Utf8JsonWriter w, IReadOnlyList<JsonElement> levels)
     {
         w.WritePropertyName("criteria");
         w.WriteStartArray();
         foreach (var level in levels)
         {
-            w.WriteStringValue(level);
+            level.WriteTo(w);
         }
 
         w.WriteEndArray();
@@ -115,14 +117,16 @@ internal static class RequestWriter
 
         w.WritePropertyName("criteria");
         w.WriteStartObject();
-        if (noul.WhenTrue is not null)
+        if (noul.WhenTrue is { } whenTrue)
         {
-            w.WriteString("true", noul.WhenTrue);
+            w.WritePropertyName("true");
+            whenTrue.WriteTo(w);
         }
 
-        if (noul.WhenFalse is not null)
+        if (noul.WhenFalse is { } whenFalse)
         {
-            w.WriteString("false", noul.WhenFalse);
+            w.WritePropertyName("false");
+            whenFalse.WriteTo(w);
         }
 
         w.WriteEndObject();

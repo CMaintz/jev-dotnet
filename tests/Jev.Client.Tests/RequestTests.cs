@@ -191,9 +191,89 @@ public sealed class RequestTests
     [Fact]
     public void Score_and_choice_require_a_valid_number_of_levels()
     {
-        Assert.Throws<ArgumentException>(() => new Score("x", ["only one"]));
+        Assert.Single(new Score("x", ["only one"]).Criteria);
+        Assert.Throws<ArgumentException>(() => new Score("x", Array.Empty<string>()));
+        Assert.Throws<ArgumentException>(() => new Score("x", Enumerable.Range(0, Score.MaxLevels + 1).Select(i => $"l{i}").ToList()));
         Assert.Throws<ArgumentException>(() => new Choice("x", new Dictionary<string, string>()));
     }
+
+    [Fact]
+    public async Task Structured_instructions_and_criteria_are_sent_as_json()
+    {
+        var questions = new Dictionary<string, Question>
+        {
+            ["team"] = new Choice(
+                new { task = "Pick the team", exclude = new List<string> { "spam" } },
+                new Dictionary<string, object> { ["billing"] = new { covers = "payments", examples = new object[] { "double charge", 2 } }, ["tech"] = "Bugs" }),
+            ["urgency"] = new Score("How urgent", new object[] { new { level = "low" }, "high" }),
+            ["spam"] = new Noul(new List<string> { "Is this spam?", "Ignore greetings." }, whenTrue: new { means = "ads" }),
+        };
+
+        var sent = (await CapturedRequest(new StubHandler(), questions, "s")).GetProperty("questions");
+
+        Assert.Equal("""{"task":"Pick the team","exclude":["spam"]}""", sent.GetProperty("team").GetProperty("instructions").GetRawText());
+        Assert.Equal("""{"covers":"payments","examples":["double charge",2]}""", sent.GetProperty("team").GetProperty("criteria").GetProperty("billing").GetRawText());
+        Assert.Equal("""[{"level":"low"},"high"]""", sent.GetProperty("urgency").GetProperty("criteria").GetRawText());
+        Assert.Equal("""["Is this spam?","Ignore greetings."]""", sent.GetProperty("spam").GetProperty("instructions").GetRawText());
+        Assert.Equal("""{"true":{"means":"ads"}}""", sent.GetProperty("spam").GetProperty("criteria").GetRawText());
+    }
+
+    [Fact]
+    public void Structured_prompts_are_copied_so_later_changes_do_not_leak()
+    {
+        var examples = new List<string> { "double charge" };
+        var choice = new Choice("Which team", new Dictionary<string, object> { ["billing"] = new Dictionary<string, object> { ["examples"] = examples } });
+        examples.Add("refund");
+
+        Assert.Equal("""{"examples":["double charge"]}""", choice.Criteria["billing"].GetRawText());
+        Assert.Throws<NotSupportedException>(() => ((IDictionary<string, JsonElement>)choice.Criteria).Clear());
+    }
+
+    [Fact]
+    public void Structured_questions_compare_by_content()
+    {
+        Assert.Equal(new Noul(new { task = "x", n = 2 }), new Noul(new Dictionary<string, object> { ["task"] = "x", ["n"] = 2 }));
+        Assert.Equal(new Noul(new { task = "x" }).GetHashCode(), new Noul(new Dictionary<string, object> { ["task"] = "x" }).GetHashCode());
+        Assert.NotEqual(new Noul(new { task = "x" }), new Noul(new { task = "y" }));
+        Assert.NotEqual(new Noul("x", whenTrue: "a"), new Noul("x", whenTrue: "b"));
+        Assert.NotEqual(new Noul("x", whenFalse: "a"), new Noul("x", whenFalse: "b"));
+        Assert.NotEqual(new Noul("x", whenTrue: "a"), new Noul("x", whenFalse: "a"));
+        Assert.Equal(new Noul(new { a = 1, b = 2.0 }), new Noul(new Dictionary<string, object> { ["b"] = 2, ["a"] = 1.0 }));
+        Assert.Equal(new Noul(new { a = 1, b = 2.0 }).GetHashCode(), new Noul(new Dictionary<string, object> { ["b"] = 2, ["a"] = 1.0 }).GetHashCode());
+        Assert.NotEqual(new Score("x", new object[] { new List<string> { "a", "b" } }), new Score("x", new object[] { new List<string> { "b", "a" } }));
+        Assert.Equal(new Score("x", new object[] { new { a = 1 } }), new Score("x", new object[] { new { a = 1 } }));
+    }
+
+    [Fact]
+    public void Structured_prompts_reject_what_json_cannot_carry()
+    {
+        Assert.Throws<ArgumentException>(() => new Noul(42));
+        Assert.Throws<ArgumentException>(() => new Noul(new { n = double.NaN }));
+        Assert.Throws<ArgumentException>(() => new Noul(new Dictionary<string, object>()));
+        Assert.Throws<ArgumentException>(() => new Noul(Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void Structured_prompts_nest_up_to_the_api_limit_of_64()
+    {
+        Assert.Equal(64, Depth(new Noul(Nested(64)).Instructions));
+        Assert.Throws<ArgumentException>(() => new Noul(Nested(65)));
+        Assert.Single(new Score("x", new[] { Nested(63) }).Criteria);
+        Assert.Throws<ArgumentException>(() => new Score("x", new[] { Nested(64) }));
+    }
+
+    private static object Nested(int levels)
+    {
+        object value = "leaf";
+        for (var i = 0; i < levels; i++)
+        {
+            value = new[] { value };
+        }
+
+        return value;
+    }
+
+    private static int Depth(JsonElement e) => e.ValueKind == JsonValueKind.Array ? 1 + Depth(e[0]) : 0;
 
     [Fact]
     public void Missing_api_key_is_rejected()

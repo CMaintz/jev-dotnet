@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Jev;
 
 /// <summary>
@@ -9,14 +11,14 @@ namespace Jev;
 public sealed record Score : Question
 {
     /// <summary>The fewest levels a Score may have.</summary>
-    public const int MinLevels = 2;
+    public const int MinLevels = 1;
 
     /// <summary>The most levels a Score may have.</summary>
     public const int MaxLevels = 10;
 
-    /// <param name="instructions">The dimension to rate, e.g. "How frustrated the customer appears".</param>
-    /// <param name="criteria">Ordered level descriptions, low to high. Between 2 and 10 levels.</param>
-    public Score(string instructions, IReadOnlyList<string> criteria)
+    /// <param name="instructions">The dimension to rate, e.g. "How frustrated the customer appears"; text or structured JSON.</param>
+    /// <param name="criteria">Ordered level descriptions, low to high, each text or structured JSON. Between 1 and 10 levels.</param>
+    public Score(object instructions, IReadOnlyList<object> criteria)
         : base(instructions)
     {
         ArgumentNullException.ThrowIfNull(criteria);
@@ -26,23 +28,16 @@ public sealed record Score : Question
                 $"A Score needs between {MinLevels} and {MaxLevels} ordered levels.", nameof(criteria));
         }
 
-        for (var i = 0; i < criteria.Count; i++)
-        {
-            if (string.IsNullOrWhiteSpace(criteria[i]))
-            {
-                throw new ArgumentException($"Level {i} needs a non-blank description.", nameof(criteria));
-            }
-        }
-
-        Criteria = Array.AsReadOnly(criteria.ToArray());
+        Criteria = Array.AsReadOnly(criteria.Select((level, i) => Prompts.Criterion(level, $"level {i}")).ToArray());
     }
 
     /// <summary>Ordered level descriptions, low to high. Sent as the wire <c>criteria</c> array.</summary>
-    public IReadOnlyList<string> Criteria { get; }
+    public IReadOnlyList<JsonElement> Criteria { get; }
 
     /// <inheritdoc />
     public bool Equals(Score? other) =>
-        other is not null && base.Equals(other) && ContentEquality.SameItems(Criteria, other.Criteria);
+        other is not null && base.Equals(other) && Criteria.Count == other.Criteria.Count
+        && Criteria.Zip(other.Criteria).All(pair => Prompts.Same(pair.First, pair.Second));
 
     /// <inheritdoc />
     public override int GetHashCode() => HashCode.Combine(base.GetHashCode(), Criteria.Count);
