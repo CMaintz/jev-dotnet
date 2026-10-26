@@ -140,10 +140,49 @@ A Box always returns a box, even when the target is absent, so ask a `Noul` alon
 and ignore the box when that answer is low. `BoxAnswer.IsConfident(threshold)` is false
 when the service gives no confidence. A request with a Box sends
 `TypeSafe-Danger-Zone-Images: true` for you. Box needs Jev 1.14 or later (`jev-latest` and
-`jev-preview` point there today) and an image in the request, which this SDK does not
-send yet. TypeSafe calls images and Box
+`jev-preview` point there today) and an [image](#images) in the request. TypeSafe calls images and Box
 ["dreamer-ready"](https://docs.typesafe.ai/primitives/box.md): experimental, with a
 request format and accuracy that may change between releases.
+
+## Images
+
+An `Image` can go anywhere text can: as the whole state, as any value inside it, as a
+question's instructions, or as a criteria value (a Choice option, a Score level, a Noul
+gloss). `TextWithImages.Of(...)` puts images inside a sentence:
+
+```csharp
+var door = Image.FromFile("door-camera.jpg");   // PNG or JPEG, told apart by content
+var badge = Image.Jpeg(badgeBytes);
+
+var response = await client.SystemOneAsync(
+    new { door },
+    new Dictionary<string, Question>
+    {
+        ["badge_holder"] = new Noul(TextWithImages.Of("Is the person in `door` the person in this badge photo: ", badge, "?")),
+        ["gesture"] = new Choice("Which gesture is the hand in `door` making?", new Dictionary<string, object>
+        {
+            ["thumbs_up"] = Image.Png(thumbsUpBytes),
+            ["none"] = "No hand, or none of the examples.",
+        }),
+        ["where"] = new Box("the person in `door`"),
+    });
+```
+
+Each image gets a unique `Reference`, written wherever you placed it, and is uploaded once
+per request however often you use it. Pass the `Image` object itself: state you serialize
+to a `JsonElement` or `JsonNode` first holds only the reference text, so the file is not
+uploaded and the model reads a meaningless string. A request with images goes out as
+`multipart/form-data` (the JSON in a `request` part, then one file part per image) with
+`TypeSafe-Danger-Zone-Images: true`; one without stays plain JSON. Questions keep the
+images in their instructions and criteria, so a question can be reused across requests.
+When several questions use one image, put it in the state once and refer to it by path:
+an image in instructions is sent to the model once per question that uses it.
+
+The SDK sends images as they are and does not decode, resize or rotate them. TypeSafe
+accepts still PNG and JPEG images of 280 to 1568 pixels per side, at most 16 MiB per file
+(`Image.MaxBytes`, checked when you make one) and 32 MiB per request, and answers 400 or 413
+otherwise. See TypeSafe's [Images](https://docs.typesafe.ai/images.md) guide for the limits
+and for preparing images. Images are "dreamer-ready" (experimental) per TypeSafe.
 
 ## Confidence
 

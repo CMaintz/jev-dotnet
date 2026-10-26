@@ -21,6 +21,12 @@ internal sealed class StubHandler : HttpMessageHandler
     /// <summary>The last request body exactly as sent.</summary>
     public byte[]? LastRequestBytes { get; private set; }
 
+    /// <summary>The last request body inflated when it was sent gzipped, as the API reads it.</summary>
+    public byte[]? LastRequestContent { get; private set; }
+
+    /// <summary>The parts of the last request, which must be multipart/form-data, read from <see cref="LastRequestContent"/>.</summary>
+    public List<MultipartPart> LastRequestParts => MultipartParts.Parse(LastRequestContent!, LastRequestHeaders["Content-Type"]);
+
     public Uri? LastRequestUri { get; private set; }
 
     public string? LastAuthorization { get; private set; }
@@ -81,16 +87,17 @@ internal sealed class StubHandler : HttpMessageHandler
         TimeProvider = Time,
     });
 
-    private static string Decode(byte[] body, ICollection<string> encodings)
+    private static byte[] Decode(byte[] body, ICollection<string> encodings)
     {
         if (!encodings.Contains("gzip"))
         {
-            return System.Text.Encoding.UTF8.GetString(body);
+            return body;
         }
 
         using var gzip = new System.IO.Compression.GZipStream(new MemoryStream(body), System.IO.Compression.CompressionMode.Decompress);
-        using var reader = new StreamReader(gzip, System.Text.Encoding.UTF8);
-        return reader.ReadToEnd();
+        using var inflated = new MemoryStream();
+        gzip.CopyTo(inflated);
+        return inflated.ToArray();
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -102,7 +109,8 @@ internal sealed class StubHandler : HttpMessageHandler
             .ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
         LastAuthorization = request.Headers.Authorization?.ToString();
         LastRequestBytes = request.Content is null ? null : await request.Content.ReadAsByteArrayAsync(cancellationToken);
-        LastRequestBody = LastRequestBytes is null ? null : Decode(LastRequestBytes, request.Content!.Headers.ContentEncoding);
+        LastRequestContent = LastRequestBytes is null ? null : Decode(LastRequestBytes, request.Content!.Headers.ContentEncoding);
+        LastRequestBody = LastRequestContent is null ? null : System.Text.Encoding.UTF8.GetString(LastRequestContent);
         if (_failure is not null)
         {
             throw _failure;

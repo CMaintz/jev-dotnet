@@ -38,7 +38,7 @@ public sealed record Choice : Question
         foreach (var (option, description) in criteria)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(option, nameof(criteria));
-            options[option] = Prompts.Criterion(description, $"description of option '{option}'");
+            options[option] = Prompts.Criterion(description, $"description of option '{option}'", Images);
         }
 
         Criteria = new ReadOnlyDictionary<string, JsonElement>(options);

@@ -15,8 +15,8 @@ public sealed record Noul : Question
     public Noul(object instructions, object? whenTrue = null, object? whenFalse = null)
         : base(instructions)
     {
-        WhenTrue = Prompts.OptionalCriterion(whenTrue, nameof(whenTrue));
-        WhenFalse = Prompts.OptionalCriterion(whenFalse, nameof(whenFalse));
+        WhenTrue = Prompts.OptionalCriterion(whenTrue, nameof(whenTrue), Images);
+        WhenFalse = Prompts.OptionalCriterion(whenFalse, nameof(whenFalse), Images);
     }
 
     /// <summary>Optional gloss for the positive case.</summary>
