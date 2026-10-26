@@ -175,7 +175,9 @@ public sealed class ImageTests
     {
         Assert.NotEqual(Image.Png(Png()).Reference, Image.Png(Png()).Reference);
         Assert.Throws<ArgumentException>(() => Image.Png([]));
-        Assert.Throws<ArgumentException>(() => Image.Jpeg(new byte[Image.MaxBytes + 1]));
+        Assert.Throws<ArgumentException>(() => Image.Png(Jpeg()));
+        Assert.Throws<ArgumentException>(() => Image.Jpeg(Png()));
+        Assert.Throws<ArgumentException>(() => Image.Jpeg(Jpeg(Image.MaxBytes + 1)));
         Assert.Throws<ArgumentException>(() => TextWithImages.Of("a count: ", 3));
         Assert.Throws<ArgumentException>(() => TextWithImages.Of("text", null!));
     }

@@ -54,12 +54,21 @@ public sealed class Image
     internal string FileExtension { get; }
 
     /// <summary>A PNG image; <paramref name="bytes"/> are copied.</summary>
-    /// <exception cref="ArgumentException">The bytes are empty or over <see cref="MaxBytes"/>.</exception>
-    public static Image Png(byte[] bytes) => new(bytes, "image/png", ".png");
+    /// <exception cref="ArgumentException">The bytes are not a PNG, or are empty or over <see cref="MaxBytes"/>.</exception>
+    public static Image Png(byte[] bytes) => new(Signed(bytes, PngSignature, "PNG"), "image/png", ".png");
 
     /// <summary>A JPEG image; <paramref name="bytes"/> are copied.</summary>
-    /// <exception cref="ArgumentException">The bytes are empty or over <see cref="MaxBytes"/>.</exception>
-    public static Image Jpeg(byte[] bytes) => new(bytes, "image/jpeg", ".jpg");
+    /// <exception cref="ArgumentException">The bytes are not a JPEG, or are empty or over <see cref="MaxBytes"/>.</exception>
+    public static Image Jpeg(byte[] bytes) => new(Signed(bytes, JpegSignature, "JPEG"), "image/jpeg", ".jpg");
+
+    // A mislabelled file would be sent with the wrong content type, which the API rejects.
+    private static byte[] Signed(byte[] bytes, byte[] signature, string format)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        return bytes.Length == 0 || bytes.AsSpan().StartsWith(signature)
+            ? bytes
+            : throw new ArgumentException($"The bytes are not a {format} image.", nameof(bytes));
+    }
 
     /// <summary>The image file at <paramref name="path"/>, PNG or JPEG as its content says, whatever its extension.</summary>
     /// <exception cref="ArgumentException">The file is neither PNG nor JPEG, is empty, or is over <see cref="MaxBytes"/>.</exception>
