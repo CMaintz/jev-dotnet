@@ -169,9 +169,10 @@ var response = await client.SystemOneAsync(
 ```
 
 Each image gets a unique `Reference`, written wherever you placed it, and is uploaded once
-per request however often you use it. Pass the `Image` object itself: state you serialize
-to a `JsonElement` or `JsonNode` first holds only the reference text, so the file is not
-uploaded and the model reads a meaningless string. A request with images goes out as
+per request however often you use it. Pass the `Image` object itself: serializing an
+`Image` or `TextWithImages` on your own (to a `JsonElement` or `JsonNode`, say) throws
+`InvalidOperationException`, since the result would hold only the reference text and the
+file would never be uploaded. A request with images goes out as
 `multipart/form-data` (the JSON in a `request` part, then one file part per image) with
 `TypeSafe-Danger-Zone-Images: true`; one without stays plain JSON. Questions keep the
 images in their instructions and criteria, so a question can be reused across requests.

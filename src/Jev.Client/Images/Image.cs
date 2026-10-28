@@ -14,9 +14,10 @@ namespace Jev;
 /// "dreamer-ready": experimental, with a format and limits that may change. Images compare
 /// by identity: two images with the same bytes are still two images.
 /// <para>
-/// Pass the image itself, inside the state or a question. An image you serialize first (say
-/// into a <see cref="System.Text.Json.JsonElement"/>) is only its reference string: the
-/// file is not uploaded, and the model reads the reference as plain text.
+/// Pass the image itself, inside the state or a question. Serializing an image on your own
+/// (say into a <see cref="System.Text.Json.JsonElement"/>) throws
+/// <see cref="InvalidOperationException"/>: the result would hold only the reference string,
+/// so the file would never be uploaded and the model would read the reference as plain text.
 /// </para>
 /// </remarks>
 [System.Text.Json.Serialization.JsonConverter(typeof(ImageConverter))]
