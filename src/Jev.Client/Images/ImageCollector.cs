@@ -25,8 +25,20 @@ internal sealed class ImageCollector : IDisposable
     /// <summary>Collect into <paramref name="into"/> until the returned scope is disposed.</summary>
     public static ImageCollector Into(ImageSet into) => new(into);
 
-    /// <summary>Record <paramref name="image"/> in the open scope; outside any scope there is no request to list it in.</summary>
-    public static void Record(Image image) => t_current?._into.Add(image);
+    /// <summary>Record <paramref name="image"/> in the open scope.</summary>
+    /// <exception cref="InvalidOperationException">No scope is open: the image is being serialized
+    /// on its own, outside a request, so its file would never be uploaded.</exception>
+    public static void Record(Image image)
+    {
+        if (t_current is null)
+        {
+            throw new InvalidOperationException(
+                "An Image cannot be serialized on its own: that keeps only its reference text and drops the file. " +
+                "Pass the Image itself in the state or a question.");
+        }
+
+        t_current._into.Add(image);
+    }
 
     public void Dispose() => t_current = _outer;
 }

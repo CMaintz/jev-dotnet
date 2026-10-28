@@ -182,6 +182,15 @@ public sealed class ImageTests
         Assert.Throws<ArgumentException>(() => TextWithImages.Of("text", null!));
     }
 
+    [Fact]
+    public void Serializing_an_image_outside_a_request_throws_instead_of_dropping_the_file()
+    {
+        var photo = Image.Png(Png());
+
+        Assert.Throws<InvalidOperationException>(() => JsonSerializer.SerializeToElement(photo));
+        Assert.Throws<InvalidOperationException>(() => JsonSerializer.SerializeToElement(TextWithImages.Of("A hand like ", photo)));
+    }
+
     private static string AssetPart(StubHandler handler, Image image) =>
         RequestJson(handler).GetProperty("assets").GetProperty(image.Reference).GetProperty("part").GetString()!;
 }
